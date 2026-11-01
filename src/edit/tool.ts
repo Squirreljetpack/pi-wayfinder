@@ -4,21 +4,13 @@ import { normalizeEditArguments } from "./shims.js";
 import { resolveEdit, validateEdit, type EditSpec } from "./resolve.js";
 import {
   readSnapshot,
-  restoreSnapshot,
   serializeSnapshot,
-  sha256,
   withFileMutationQueues,
-  writeSnapshot,
   type TextSnapshot,
 } from "./snapshot.js";
-import { appendTransaction } from "../history/db.js";
+import { recordAndWriteLocked } from "../history/restore.js";
 import { expandPath } from "../read/paths.js";
-import {
-  combineDiffs,
-  createPiDiff,
-  createUnifiedPatch,
-  type DiffDetails,
-} from "../rendering/diff-output.js";
+import { createPiDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
 import { EditSchema } from "../tools/schemas.js";
 
@@ -164,37 +156,26 @@ export function registerEditTool(pi: ExtensionAPI): void {
             throw new Error("edits produced no changes, nothing was written");
           }
 
-          const transactionId = await appendTransaction({
-            cwd: ctx.cwd,
-            kind: "edit",
-            summary: `${edits.length} edit(s) across ${staged.length} file(s)`,
-            changes: staged.map((file) => ({
-              path: file.snapshot.displayPath,
-              absolutePath: file.snapshot.absolutePath,
-              before: file.snapshot.raw,
-              afterSha: sha256(serializeSnapshot(file.snapshot, file.newText)),
+          const report = await recordAndWriteLocked(
+            staged.map((file) => ({
+              snapshot: file.snapshot,
+              after: Buffer.from(serializeSnapshot(file.snapshot, file.newText), "utf-8"),
+              summary: `${file.edits} edit${file.edits === 1 ? "" : "s"}, ${file.replacements} replacement${file.replacements === 1 ? "" : "s"}`,
             })),
-          });
+            {
+              cwd: ctx.cwd,
+              kind: "edit",
+              headline: summarize(staged),
+              session: {
+                id: ctx.sessionManager?.getSessionId?.(),
+                dir: ctx.sessionManager?.getSessionDir?.(),
+                file: ctx.sessionManager?.getSessionFile?.(),
+              },
+              signal,
+            },
+          );
 
-          const written: TextSnapshot[] = [];
-          try {
-            for (const file of staged) {
-              throwIfAborted(signal);
-              await writeSnapshot(file.snapshot, file.newText, signal);
-              written.push(file.snapshot);
-            }
-          } catch (error) {
-            for (const snapshot of written.reverse()) {
-              try {
-                await restoreSnapshot(snapshot);
-              } catch {
-                // Restoring is best effort; the transaction log is the authoritative undo path.
-              }
-            }
-            throw error;
-          }
-
-          const diffs = staged.map((file) => file.diff);
+          const diffs = report.diffs;
           const details: EditToolDetails = {
             paths: staged.map((file) => file.snapshot.displayPath),
             files: staged.map((file) => ({
@@ -205,18 +186,17 @@ export function registerEditTool(pi: ExtensionAPI): void {
             edits: staged.reduce((sum, file) => sum + file.edits, 0),
             replacements: staged.reduce((sum, file) => sum + file.replacements, 0),
             diffs,
-            diff: combineDiffs(diffs),
-            patch: createUnifiedPatch(
-              staged.map((file) => ({ path: file.snapshot.displayPath, before: file.snapshot.text, after: file.newText })),
-            ),
+            diff: report.diff,
+            patch: report.patch,
             firstChangedLine: diffs[0]?.firstChangedLine,
-            transactionId,
+            transactionId: report.commitId,
           };
 
+          const shortId = report.commitId?.slice(0, 12);
           const transactionLine =
-            transactionId === null
-              ? "\n(History unavailable: this edit cannot be rolled back.)"
-              : `\nTransaction ${transactionId} — undo with rollback({ transaction_id: "${transactionId}" })`;
+            shortId === undefined
+              ? "\n(History unavailable: this edit cannot be undone.)"
+              : `\nTransaction ${shortId} — undo with rewind({ id: "${shortId}", mode: "undo" })`;
 
           return { content: [{ type: "text" as const, text: `${summarize(staged)}${transactionLine}` }], details };
         },

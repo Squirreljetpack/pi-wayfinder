@@ -15,7 +15,7 @@
     "symbol-search",
     "symbol-rename",
     "refactoring",
-    "rollback"
+    "rewind"
   ],
   "repository": {
     "type": "git",

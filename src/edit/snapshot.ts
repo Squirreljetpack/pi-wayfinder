@@ -11,7 +11,7 @@ export interface TextSnapshot {
   displayPath: string;
   /** LF-normalized, BOM-stripped content used for matching. */
   text: string;
-  /** Exactly the bytes that were on disk, for rollback and restore-on-failure. */
+  /** Exactly the bytes that were on disk, for rewind and restore-on-failure. */
   raw: Buffer;
   bom: string;
   eol: "\r\n" | "\n";
@@ -25,6 +25,12 @@ export function sha256(data: Buffer | string): string {
 
 export function normalizeToLF(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/** LF-normalized, BOM-stripped text of raw file bytes. */
+export function textOfBytes(bytes: Buffer): string {
+  const decoded = bytes.toString("utf-8");
+  return normalizeToLF(decoded.startsWith(BOM) ? decoded.slice(BOM.length) : decoded);
 }
 
 export function detectEol(text: string): "\r\n" | "\n" {
@@ -78,11 +84,15 @@ export function serializeSnapshot(snapshot: TextSnapshot, text: string): string 
 }
 
 export async function writeSnapshot(snapshot: TextSnapshot, text: string, signal?: AbortSignal): Promise<void> {
-  const restored = serializeSnapshot(snapshot, text);
+  return writeSnapshotBytes(snapshot, Buffer.from(serializeSnapshot(snapshot, text), "utf-8"), signal);
+}
+
+/** Writes exact bytes over a snapshot's file, keeping its mode and guarding against concurrent writes. */
+export async function writeSnapshotBytes(snapshot: TextSnapshot, bytes: Buffer, signal?: AbortSignal): Promise<void> {
   const tempPath = tempPathFor(snapshot.absolutePath);
 
   try {
-    await writeFile(tempPath, restored, { encoding: "utf-8", signal });
+    await writeFile(tempPath, bytes, { signal });
     await chmod(tempPath, snapshot.mode);
   } catch (error) {
     await rm(tempPath, { force: true });
@@ -105,6 +115,19 @@ export async function writeSnapshot(snapshot: TextSnapshot, text: string, signal
   }
 
   await rename(tempPath, snapshot.absolutePath);
+}
+
+/** Creates a file that was recorded in history but is gone from disk. */
+export async function writeNewFile(absolutePath: string, bytes: Buffer, mode: number, signal?: AbortSignal): Promise<void> {
+  const tempPath = tempPathFor(absolutePath);
+  try {
+    await writeFile(tempPath, bytes, { signal });
+    await chmod(tempPath, mode);
+  } catch (error) {
+    await rm(tempPath, { force: true });
+    throw error;
+  }
+  await rename(tempPath, absolutePath);
 }
 
 /**

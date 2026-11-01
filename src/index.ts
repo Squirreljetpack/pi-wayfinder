@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerRewindCommand } from "./commands/rewind.js";
 import { registerEditTool } from "./edit/tool.js";
 import { getWayfinderPromptGuidance } from "./prompt.js";
-import { registerRollbackTool } from "./history/rollback.js";
 import { registerReadTool } from "./read/tool.js";
 import { SymbolCache } from "./symbols/symbol-cache.js";
 import { SymbolScanner } from "./symbols/symbol-scanner.js";
@@ -11,6 +11,7 @@ import { registerGetFunctionTool } from "./tools/get-function.js";
 import { registerInsertSymbolTool } from "./tools/insert-symbol.js";
 import { registerRenameSymbolTool } from "./tools/rename-symbol.js";
 import { registerReplaceSymbolTool } from "./tools/replace-symbol.js";
+import { registerRewindTool } from "./tools/rewind.js";
 
 export default function wayfinderExtension(pi: ExtensionAPI): void {
 	const symbolCache = new SymbolCache();
@@ -18,7 +19,8 @@ export default function wayfinderExtension(pi: ExtensionAPI): void {
 
 	registerEditTool(pi);
 	registerReadTool(pi);
-	registerRollbackTool(pi);
+	registerRewindTool(pi);
+	registerRewindCommand(pi);
 	registerGetFileSkeletonTool(pi);
 	registerGetFunctionTool(pi);
 	registerReplaceSymbolTool(pi, symbolScanner);

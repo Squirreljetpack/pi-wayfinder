@@ -57,14 +57,32 @@ export const EditSchema = Type.Object({
 	),
 });
 
-export const RollbackSchema = Type.Object({
-	transaction_id: Type.String({
-		description: 'Transaction id returned by edit, or "last" for the most recent one in this repository',
-	}),
-	force: Type.Optional(
-		Type.Boolean({
-			description: "Restore even when files changed after that transaction (default: false)",
+export const RewindSchema = Type.Object({
+	path: Type.Optional(
+		Type.String({
+			description:
+				"File to look at, relative to the working directory; omit to list every file with recorded history",
 		}),
+	),
+	id: Type.Optional(
+		Type.String({
+			description:
+				'Version id from a rewind listing, or "last" for the newest transaction in the working directory',
+		}),
+	),
+	mode: Type.Optional(
+		Type.Union(
+			[
+				Type.Literal("show"),
+				Type.Literal("preview"),
+				Type.Literal("undo"),
+				Type.Literal("restore"),
+			],
+			{
+				description:
+					'show: what the transaction changed; preview: the file at that transaction; undo: revert the change; restore: set the files to that transaction',
+			},
+		),
 	),
 });
 

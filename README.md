@@ -5,7 +5,8 @@ Structure-aware code navigation and transactional editing tools for pi agents.
 A fork of [pi-wayfinder](https://github.com/deevus/pi-wayfinder) that keeps its tree-sitter half and
 replaces the anchor-based editing half with three ways to name a region that need no state: the
 exact text, a pair of delimiters, or line numbers. Every edit is validated before anything is
-written, count-verified, and recorded in a transaction log that can be rolled back.
+written, count-verified, and recorded as one commit in a git-backed file history, so any change can
+be undone — by the agent or from `/rewind`.
 
 ## Tools
 
@@ -13,7 +14,7 @@ written, count-verified, and recorded in a transaction log that can be rolled ba
 | --- | --- |
 | `read` | pi's `read` with a line-number gutter on every line (images and binary files unchanged). Replaces the built-in `read`. |
 | `edit` | One transactional call, many edits, many files. Modes `exact`, `between`, `lines`. Replaces the built-in `edit`. |
-| `rollback` | Restores the files a previous `edit` changed, from the transaction log. |
+| `rewind` | Browses the recorded file history per file and undoes or restores a transaction's changes. |
 | `get_file_skeleton` | Compact outline of functions, classes, methods and exports, with line numbers. |
 | `get_function` | Full bodies of the requested symbols, numbered, with their local imports and class context. |
 | `replace_symbol` | Replace a whole function/method/class/interface by tree-sitter range; `text: ""` deletes it. |
@@ -50,29 +51,64 @@ and a failure during the write phase restores the files already written.
 Line-number gutters copied from `read` output are stripped from replacement text, so pasting
 numbered lines cannot inject the gutter into a file.
 
-### Rollback
+### File history
 
-Every successful edit returns a transaction id:
+Every successful edit returns a transaction id, which is the id of the commit that records it:
 
 ```
 Updated 2 files: 5 edits, 7 replacements.
   src/a.ts: 3 edits, 5 replacements
   src/b.ts: 2 edits, 2 replacements
-Transaction m3k9x2-4f1a9c — undo with rollback({ transaction_id: "m3k9x2-4f1a9c" })
+Transaction ac666590a66f — undo with rewind({ id: "ac666590a66f", mode: "undo" })
 ```
 
-`rollback({ transaction_id })` (or `"last"`) restores the exact bytes from before that transaction.
-It refuses when a file changed afterwards unless `force: true`, and it records itself as a
-transaction, so a mistaken rollback can be rolled back.
+`rewind` is the tool for reading and using that history:
 
-The log is a SQLite database at `~/.cache/pi-wayfinder/history.db` (`$PI_WAYFINDER_HOME` overrides
-the directory), scoped per repository by its `cwd` column and capped at 500 transactions / 128 MB:
+| Call | Result |
+| --- | --- |
+| `rewind({})` | files with recorded history in the working directory, with version counts |
+| `rewind({ path })` | that file's versions: id, time, `+added -deleted`, subject |
+| `rewind({ id })` / `mode: "show"` | the diff the transaction applied |
+| `rewind({ id, mode: "preview" })` | the file as of that transaction, numbered |
+| `rewind({ id, mode: "undo" })` | revert the change, patching around edits that landed afterwards |
+| `rewind({ id, mode: "restore" })` | set the files to their content at that transaction |
+
+`id: "last"` means the newest transaction in the working directory. Undo refuses, and writes
+nothing, when the changed lines no longer match; restore overwrites. Both are recorded as their own
+transaction, so the opposite mode reverses them.
+
+`/rewind` is the same history for a human: pick a file, pick a version (timestamp and `+n -n`),
+confirm against a diff preview, and the file is restored.
+
+### Where the history lives
+
+One bare git repository holds every project:
+
+```
+~/.cache/pi-wayfinder/history.git          # $PI_WAYFINDER_HOME overrides the directory
+```
+
+An absolute path maps onto the tree without its leading slash, so `/home/me/app/a.ts` is
+`home/me/app/a.ts` in the repository, and `git show <id>:home/me/app/a.ts` is that file at that
+transaction. Each commit also stores the bytes each touched file had beforehand under
+`.pi-wayfinder/<path>`, so undo works for the very first transaction that touched a file and does
+not depend on what the parent commit recorded.
+
+The commit message carries the session id, session directory, working directory and the list of
+files, which is what makes a transaction traceable back to the conversation that produced it.
+Objects are compressed at level 9 and `git gc --auto` runs after each commit.
+
+Concurrent sessions never share a worktree: blobs are written with `hash-object`, the tree is
+assembled in a private index, and the branch advances with a compare-and-swap `update-ref`. A
+transaction that loses the race rebuilds on the new parent; if another session changed one of the
+same files in the meantime, the call fails before writing anything and tells you to re-read the file.
+
+Inspect it with plain git:
 
 ```bash
-sqlite3 ~/.cache/pi-wayfinder/history.db \
-  "select t.id, datetime(t.created_at/1000,'unixepoch'), t.kind, c.path
-     from txn t join change c on c.txn_id = t.id
-    order by t.rowid desc limit 20"
+git --git-dir ~/.cache/pi-wayfinder/history.git log --oneline -20
+git --git-dir ~/.cache/pi-wayfinder/history.git show --stat <id>
+git --git-dir ~/.cache/pi-wayfinder/history.git log -p -- home/me/app/a.ts
 ```
 
 ## Install
@@ -87,10 +123,10 @@ For local development:
 pi -e .
 ```
 
-This package registers tools named `edit` and `read`, so it cannot be enabled alongside the
-original `pi-wayfinder` (pi rejects two extensions that register the same tool). Remove one.
+This package registers tools named `edit`, `read` and `rewind`, so it cannot be enabled alongside
+the original `pi-wayfinder` (pi rejects two extensions that register the same tool). Remove one.
 
-There are no flags, no modes and no slash commands: the extension always replaces `read` and `edit`.
+There are no flags and no modes: the extension always replaces `read` and `edit`.
 
 ## Development
 

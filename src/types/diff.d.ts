@@ -24,4 +24,19 @@ declare module "diff" {
     newHeader?: string,
     options?: { context?: number },
   ): string;
+
+  export function createPatch(
+    fileName: string,
+    oldStr: string,
+    newStr: string,
+    oldHeader?: string,
+    newHeader?: string,
+    options?: { context?: number },
+  ): string;
+
+  export function applyPatch(
+    source: string,
+    patch: string,
+    options?: { fuzzFactor?: number },
+  ): string | false;
 }
