@@ -12,11 +12,10 @@ be undone — by the agent or from `/rewind`.
 
 | Tool | What it does |
 | --- | --- |
-| `read` | pi's `read` with a line-number gutter on every line (images and binary files unchanged). Replaces the built-in `read`. |
 | `edit` | One transactional call, many edits, many files. Modes `exact`, `between`, `lines`. Replaces the built-in `edit`. |
 | `rewind` | Browses the recorded file history per file and undoes or restores a transaction's changes. |
-| `get_file_skeleton` | Compact outline of functions, classes, methods and exports, with line numbers. |
-| `get_function` | Full bodies of the requested symbols, numbered, with their local imports and class context. |
+| `get_file_skeleton` | Compact outline of functions, classes, methods and exports. `lines: true` numbers every line. |
+| `get_function` | Full bodies of the requested symbols with their local imports and class context. `lines: true` numbers every line. |
 | `replace_symbol` | Replace a whole function/method/class/interface by tree-sitter range; `text: ""` deletes it. |
 | `insert_symbol` | Insert code before or after a named symbol, doc comment included. |
 | `find_symbol_references` | Exact tree-sitter definitions and references across paths. |
@@ -42,14 +41,15 @@ be undone — by the agent or from `/rewind`.
   that retyping it is pointless. `include_delimiters: true` replaces the delimiters too; adjacent
   delimiters with `new` text insert.
 - **lines** replaces whole lines from `start_line` to `end_line` (inclusive, defaulting to
-  `start_line`). `end_line = start_line - 1` inserts before `start_line`.
+  `start_line`). `end_line = start_line - 1` inserts before `start_line`. Numbers come from
+  `get_file_skeleton` / `get_function` with `lines: true`, or from `bash: grep -n`.
 
 Every edit is matched against the original file, never against an earlier edit in the same call.
 Overlapping ranges are an error. Any failing edit aborts the call before the first byte is written,
 and a failure during the write phase restores the files already written.
 
-Line-number gutters copied from `read` output are stripped from replacement text, so pasting
-numbered lines cannot inject the gutter into a file.
+Line-number gutters copied from `get_file_skeleton` or `get_function` output (`lines: true`) are
+stripped from replacement text, so pasting numbered lines cannot inject the gutter into a file.
 
 ### File history
 
@@ -123,10 +123,10 @@ For local development:
 pi -e .
 ```
 
-This package registers tools named `edit`, `read` and `rewind`, so it cannot be enabled alongside
-the original `pi-wayfinder` (pi rejects two extensions that register the same tool). Remove one.
+This package registers a tool named `edit`, so it cannot be enabled alongside the original
+`pi-wayfinder` (pi rejects two extensions that register the same tool). Remove one.
 
-There are no flags and no modes: the extension always replaces `read` and `edit`.
+There are no flags and no modes: the extension always replaces `edit`.
 
 ## Development
 

@@ -5,8 +5,8 @@ export function getWayfinderPromptGuidance(): string {
 Explore before reading:
 1. Start with get_file_skeleton to map functions, classes, methods, and exports, with line numbers, without reading the whole file.
 2. Use get_function next for the specific definitions you need, with their local imports and class context.
-3. Use read for narrow line ranges, non-symbol context, small/config files, or when skeleton/function output is insufficient.
-4. Every line of read, get_file_skeleton and get_function output starts with its line number. Those numbers are details of the tool output, never part of the file.
+3. Use read for narrow line ranges, non-symbol context, small/config files, or when skeleton/function output is insufficient; it prints raw file text.
+4. Pass lines: true to get_file_skeleton or get_function when you need line numbers; the gutter is only printed on request. Those numbers are details of the tool output, never part of the file, and they are what lines mode refers to. For a region no tool numbered, get the numbers with bash: grep -n.
 
 Editing:
 - Prefer replace_symbol for whole functions, methods, classes, interfaces, or exported const/arrow functions: it replaces the tree-sitter range, doc comment included.

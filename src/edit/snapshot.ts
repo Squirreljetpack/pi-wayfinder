@@ -2,7 +2,7 @@ import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { expandPath } from "../read/paths.js";
+import { expandPath } from "../paths.js";
 
 const BOM = "\uFEFF";
 

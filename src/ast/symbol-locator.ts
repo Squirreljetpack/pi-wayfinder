@@ -4,7 +4,7 @@ import type { QueryMatch, SyntaxNode } from "web-tree-sitter";
 import { loadRequiredLanguageParsers } from "./language-parser.js";
 import { parseFile } from "./parse-file.js";
 import { SymbolContextResolver } from "./symbol-context-resolver.js";
-import { formatNumberedLine } from "../tools/line-numbers.js";
+import { formatLine } from "../tools/line-numbers.js";
 
 export interface SymbolRange {
   startIndex: number;
@@ -23,10 +23,10 @@ export interface GetFunctionsResult {
  * Line numbers are 0-based rows internally and 1-based in rendered output.
  */
 export class SymbolLocator {
-  /** Compact outline of every definition in a file. */
+  /** Compact outline of every definition in a file, numbered on request. */
   static async getFileSkeleton(
     absolutePath: string,
-    options?: { showCallGraph?: boolean },
+    options?: { showCallGraph?: boolean; lines?: boolean },
   ): Promise<string | null> {
     const languageParsers = await loadRequiredLanguageParsers([absolutePath]);
     const definitions = await parseFile(absolutePath, languageParsers, options);
@@ -41,7 +41,7 @@ export class SymbolLocator {
       if (lastLineAdded !== -1 && startLine > lastLineAdded + 1) formattedOutput += "|----\n";
 
       if (startLine > lastLineAdded) {
-        formattedOutput += `${formatNumberedLine(startLine + 1, def.text)}\n`;
+        formattedOutput += `${formatLine(startLine + 1, def.text, options?.lines)}\n`;
         lastLineAdded = startLine;
 
         if (options?.showCallGraph) {
@@ -54,11 +54,12 @@ export class SymbolLocator {
     return formattedOutput.length > 0 ? `|----\n${formattedOutput}|----\n` : null;
   }
 
-  /** Full bodies of the requested symbols, numbered, preceded by their local context. */
+  /** Full bodies of the requested symbols, preceded by their local context, numbered on request. */
   static async getFunctions(
     absolutePath: string,
     relPath: string,
     functionNames: string[],
+    options?: { lines?: boolean },
   ): Promise<GetFunctionsResult | null> {
     let languageParsers;
     try {
@@ -135,10 +136,11 @@ export class SymbolLocator {
         fileContent,
         parser,
         ext,
+        lines: options?.lines,
         rootNode: tree.rootNode,
       });
       const formatted = defLines
-        .map((line, index) => formatNumberedLine(startLine + index + 1, line))
+        .map((line, index) => formatLine(startLine + index + 1, line, options?.lines))
         .join("\n");
 
       fileResults.push(`${relPath}::${fullName}\n${context}${formatted}`);

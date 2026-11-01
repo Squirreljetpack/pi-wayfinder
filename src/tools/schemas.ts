@@ -90,6 +90,11 @@ export const GetFileSkeletonSchema = Type.Object({
 	paths: Type.Array(
 		Type.String({ description: "Relative or absolute source file paths" }),
 	),
+	lines: Type.Optional(
+		Type.Boolean({
+			description: "Prefix each output line with its line number, for use with edit's lines mode",
+		}),
+	),
 });
 
 export const GetFunctionSchema = Type.Object({
@@ -98,6 +103,11 @@ export const GetFunctionSchema = Type.Object({
 	),
 	function_names: Type.Array(
 		Type.String({ description: "Function, class, or method names to read" }),
+	),
+	lines: Type.Optional(
+		Type.Boolean({
+			description: "Prefix each output line with its line number, for use with edit's lines mode",
+		}),
 	),
 });
 

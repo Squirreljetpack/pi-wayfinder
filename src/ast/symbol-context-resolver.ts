@@ -1,4 +1,4 @@
-import { formatNumberedLine } from "../tools/line-numbers.js";
+import { formatLine } from "../tools/line-numbers.js";
 import Parser, { type QueryCapture, type SyntaxNode } from "web-tree-sitter";
 
 export interface SymbolContextResolverOptions {
@@ -7,6 +7,8 @@ export interface SymbolContextResolverOptions {
   parser: Parser;
   ext: string;
   maxContextLines?: number;
+  /** Number the context lines, matching the caller's own output. */
+  lines?: boolean;
   rootNode?: SyntaxNode;
 }
 
@@ -53,7 +55,7 @@ export class SymbolContextResolver {
       );
       const classContext = SymbolContextResolver.getClassContext(node, captures, memberPropertyNames, queryStrings);
 
-      return SymbolContextResolver.assembleContext(relevantImports, classContext, fileContent, maxContextLines);
+      return SymbolContextResolver.assembleContext(relevantImports, classContext, fileContent, maxContextLines, options.lines);
     } catch {
       return "";
     }
@@ -262,6 +264,7 @@ export class SymbolContextResolver {
     classContext: { classNode: SyntaxNode; propertyNodes: SyntaxNode[] } | null,
     fileContent: string,
     maxLines: number,
+    numbered: boolean | undefined,
   ): string {
     const lines: { text: string; lineIndex: number }[] = [];
     const fileLines = fileContent.split(/\r?\n/);
@@ -301,7 +304,7 @@ export class SymbolContextResolver {
     for (const line of sortedLines) {
       if (linesCount >= maxLines) break;
       if (lastLineIdx !== -1 && line.lineIndex > lastLineIdx + 1) result += "...\n";
-      result += `${formatNumberedLine(line.lineIndex + 1, line.text)}\n`;
+      result += `${formatLine(line.lineIndex + 1, line.text, numbered)}\n`;
       lastLineIdx = line.lineIndex;
       linesCount++;
     }

@@ -9,7 +9,7 @@ import {
   type TextSnapshot,
 } from "./snapshot.js";
 import { recordAndWriteLocked } from "../history/restore.js";
-import { expandPath } from "../read/paths.js";
+import { expandPath } from "../paths.js";
 import { createPiDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
 import { EditSchema } from "../tools/schemas.js";
@@ -95,9 +95,9 @@ export function registerEditTool(pi: ExtensionAPI): void {
       "Batch all edits for a task into one edit call: several entries in edits[], one per region, may span multiple files.",
       'mode "exact" replaces every occurrence of old; set expected_matches when the count matters.',
       'mode "between" replaces the text between a start and end delimiter; use it when the region is large and retyping it is pointless. Set include_delimiters to replace the delimiters too, and new: "" with adjacent delimiters to insert.',
-      'mode "lines" replaces whole lines using the numbers read reported; end_line omitted means one line, end_line = start_line - 1 inserts before start_line.',
+      'mode "lines" replaces whole lines, numbered as get_file_skeleton and get_function print them with lines: true (or with bash: grep -n); end_line omitted means one line, end_line = start_line - 1 inserts before start_line.',
       "Every edit is matched against the original file, not against earlier edits in the same call. Ranges that overlap are an error.",
-      "Line-number gutters copied from read output are stripped from replacement text.",
+      "Line-number gutters copied from get_file_skeleton or get_function output with lines: true are stripped from replacement text.",
     ],
     parameters: EditSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },

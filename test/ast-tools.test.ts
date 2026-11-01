@@ -75,7 +75,7 @@ describe("AST read tools", () => {
     await writeFile(join(cwd, "sample.ts"), source, "utf8");
 
     const tool = registerSkeletonToolForTest();
-    const result = await tool.execute("call-1", { paths: ["sample.ts"] }, undefined, undefined, { cwd } as never);
+    const result = await tool.execute("call-1", { paths: ["sample.ts"], lines: true }, undefined, undefined, { cwd } as never);
     const text = result.content[0]?.type === "text" ? result.content[0].text : "";
 
     expect(text).toContain("--- sample.ts ---");
@@ -118,7 +118,7 @@ describe("AST read tools", () => {
     const tool = registerFunctionToolForTest();
     const result = await tool.execute(
       "call-3",
-      { paths: ["sample.ts"], function_names: ["greet", "Missing"] },
+      { paths: ["sample.ts"], function_names: ["greet", "Missing"], lines: true },
       undefined,
       undefined,
       { cwd } as never
@@ -352,7 +352,7 @@ describe("AST read tools", () => {
     const tool = registerFunctionToolForTest();
     const result = await tool.execute(
       "call-9",
-      { paths: ["sample.ts"], function_names: ["safeBraces"] },
+      { paths: ["sample.ts"], function_names: ["safeBraces"], lines: true },
       undefined,
       undefined,
       { cwd } as never

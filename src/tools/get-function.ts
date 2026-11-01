@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { SymbolLocator, type GetFunctionsResult } from "../ast/symbol-locator.js";
-import { formatNumberedLine } from "./line-numbers.js";
+import { formatLine } from "./line-numbers.js";
 import { renderCodeLikeCall, renderCodeLikeResult } from "../rendering/pi-renderers.js";
 import { appendOutputLine, appendTruncationNotice, createOutputAccumulator, throwIfAborted } from "./output-limits.js";
 import { GetFunctionSchema } from "./schemas.js";
@@ -234,6 +234,7 @@ export function getRegexFunction(
   absolutePath: string,
   requestedPath: string,
   name: string,
+  numbered: boolean | undefined,
 ): string {
   const lines = content.split(/\r?\n/);
   const range = findFunctionRange(lines, name);
@@ -242,7 +243,7 @@ export function getRegexFunction(
 
   const [start, end] = range;
   const body = lines.slice(start, end + 1);
-  const formattedBody = body.map((line, offset) => formatNumberedLine(start + offset + 1, line)).join("\n");
+  const formattedBody = body.map((line, offset) => formatLine(start + offset + 1, line, numbered)).join("\n");
   return `${requestedPath}::${name}\n${formattedBody}`;
 }
 
@@ -265,11 +266,13 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "get_function",
     label: "Get Function",
-    description: "After get_file_skeleton, extract implementations of the specific named functions/classes needed for the task.",
+    description:
+      "After get_file_skeleton, extract implementations of the specific named functions/classes needed for the task. Pass lines: true to number each line.",
     promptSnippet: "Use get_function after get_file_skeleton to read only the relevant implementations.",
     promptGuidelines: [
       "Prefer get_function after a skeleton has identified the symbols relevant to the task.",
-      "Use read only if the needed context is not represented by a symbol or a narrow line range is clearer."
+      "Use read only if the needed context is not represented by a symbol or a narrow line range is clearer.",
+      "Pass lines: true when the next step is a line edit, so edit's lines mode can use the numbers."
     ],
     parameters: GetFunctionSchema,
     renderCall(args, theme) {
@@ -293,7 +296,7 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
 
         let astResult: GetFunctionsResult | null = null;
         try {
-          astResult = await SymbolLocator.getFunctions(absolutePath, requestedPath, params.function_names);
+          astResult = await SymbolLocator.getFunctions(absolutePath, requestedPath, params.function_names, { lines: params.lines });
         } catch {
           astResult = null;
         }
@@ -321,7 +324,7 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
             appendOutputLine(output, "");
           }
 
-          appendText(output, getRegexFunction(content, absolutePath, requestedPath, name));
+          appendText(output, getRegexFunction(content, absolutePath, requestedPath, name, params.lines));
           hasOutput = true;
         }
       }

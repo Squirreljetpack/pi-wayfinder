@@ -3,19 +3,19 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { SymbolLocator } from "../ast/symbol-locator.js";
 import { renderCodeLikeCall, renderCodeLikeResult } from "../rendering/pi-renderers.js";
-import { formatNumberedLine } from "./line-numbers.js";
+import { formatLine } from "./line-numbers.js";
 import { appendOutputLine, appendTruncationNotice, createOutputAccumulator, throwIfAborted } from "./output-limits.js";
 import { GetFileSkeletonSchema } from "./schemas.js";
 
 const DEFINITION_LINE = /^\s*(export\s+)?(default\s+)?(async\s+)?(function\s+\w+|class\s+\w+|const\s+\w+\s*=\s*(async\s*)?(\([^)]*\)|\w+)?\s*=>?|def\s+\w+)/;
 
-function getRegexSkeleton(content: string): string[] {
+function getRegexSkeleton(content: string, numbered: boolean | undefined): string[] {
   const lines = content.split(/\r?\n/);
 
   return lines
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => DEFINITION_LINE.test(line))
-    .map(({ line, index }) => formatNumberedLine(index + 1, line));
+    .map(({ line, index }) => formatLine(index + 1, line, numbered));
 }
 
 function appendText(output: ReturnType<typeof createOutputAccumulator>, text: string): void {
@@ -29,11 +29,12 @@ export function registerGetFileSkeletonTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "get_file_skeleton",
     label: "Get File Skeleton",
-    description: "First-pass source exploration: return a compact outline of functions, classes, methods, and exports, with line numbers, before reading full files.",
+    description: "First-pass source exploration: return a compact outline of functions, classes, methods, and exports before reading full files. Pass lines: true to number each line.",
     promptSnippet: "Use get_file_skeleton first when exploring source code so you can choose targeted get_function reads instead of broad file reads.",
     promptGuidelines: [
       "Call get_file_skeleton before read when you need to understand the structure of a source file.",
-      "After reviewing the skeleton, call get_function for the specific symbols that matter."
+      "After reviewing the skeleton, call get_function for the specific symbols that matter.",
+      "Pass lines: true when the next step is a line edit, so edit's lines mode can use the numbers."
     ],
     parameters: GetFileSkeletonSchema,
     renderCall(args, theme) {
@@ -58,7 +59,7 @@ export function registerGetFileSkeletonTool(pi: ExtensionAPI): void {
 
         let astSkeleton: string | null = null;
         try {
-          astSkeleton = await SymbolLocator.getFileSkeleton(absolutePath);
+          astSkeleton = await SymbolLocator.getFileSkeleton(absolutePath, { lines: params.lines });
         } catch {
           astSkeleton = null;
         }
@@ -71,7 +72,7 @@ export function registerGetFileSkeletonTool(pi: ExtensionAPI): void {
         }
 
         const content = await readFile(absolutePath, { encoding: "utf8", signal });
-        const skeleton = getRegexSkeleton(content);
+        const skeleton = getRegexSkeleton(content, params.lines);
 
         if (skeleton.length) {
           for (const line of skeleton) {

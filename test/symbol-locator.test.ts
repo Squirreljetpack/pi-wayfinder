@@ -26,12 +26,30 @@ describe("SymbolLocator", () => {
       "export const helper = () => 2;"
     ].join("\n"), "utf8");
 
-    const text = await SymbolLocator.getFileSkeleton(filePath);
+    const text = await SymbolLocator.getFileSkeleton(filePath, { lines: true });
 
     expect(text).toContain("|----");
     expect(text).toContain("1│export class Service {");
     expect(text).toContain("2│  run() { return 1; }");
     expect(text).toContain("4│export const helper = () => 2;");
+  });
+
+  it("omits line numbers unless they are asked for", async () => {
+    const cwd = await createTempDir();
+    const filePath = join(cwd, "sample.ts");
+    await writeFile(filePath, [
+      "export class Service {",
+      "  run() { return 1; }",
+      "}",
+    ].join("\n"), "utf8");
+
+    const skeleton = await SymbolLocator.getFileSkeleton(filePath);
+    const functions = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"]);
+
+    expect(skeleton).toContain("export class Service {");
+    expect(skeleton).not.toContain("│");
+    expect(functions?.formattedContent).toContain("  run() { return 1; }");
+    expect(functions?.formattedContent).not.toContain("│");
   });
 
   it("extracts nested method implementations by suffix name", async () => {
@@ -47,7 +65,7 @@ describe("SymbolLocator", () => {
       "}"
     ].join("\n"), "utf8");
 
-    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"]);
+    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"], { lines: true });
 
     expect(result?.foundNames).toEqual(["run"]);
     expect(result?.formattedContent).toContain("sample.ts::Service.run");
@@ -66,7 +84,7 @@ describe("SymbolLocator", () => {
       "}"
     ].join("\n"), "utf8");
 
-    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["helper"]);
+    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["helper"], { lines: true });
 
     expect(result?.formattedContent).toContain("1│/** Docs for helper */");
     expect(result?.formattedContent).toContain("2│export function helper() {");
@@ -83,7 +101,7 @@ describe("SymbolLocator", () => {
       "}"
     ].join("\n"), "utf8");
 
-    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["helper"]);
+    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["helper"], { lines: true });
 
     expect(result?.formattedContent).not.toContain("1│// Detached docs");
     expect(result?.formattedContent).toContain("3│export function helper() {");
@@ -106,7 +124,7 @@ describe("SymbolLocator", () => {
       "}"
     ].join("\n"), "utf8");
 
-    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"]);
+    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"], { lines: true });
 
     expect(result?.formattedContent).toContain("1│import { dep } from './dep';");
     expect(result?.formattedContent).not.toContain("2│import { unused } from './used';");
@@ -124,7 +142,7 @@ describe("SymbolLocator", () => {
       "}"
     ].join("\n"), "utf8");
 
-    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"]);
+    const result = await SymbolLocator.getFunctions(filePath, "sample.ts", ["run"], { lines: true });
     const marker = "│  run = () => this.used";
 
     expect(result?.formattedContent.split(marker).length).toBe(2);

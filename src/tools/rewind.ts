@@ -9,7 +9,7 @@ import {
   type StoredFile,
   type StoredTransaction,
 } from "../history/store.js";
-import { expandPath } from "../read/paths.js";
+import { expandPath } from "../paths.js";
 import { combineDiffs, createPiDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderCodeLikeResult, renderDiffResult } from "../rendering/pi-renderers.js";
 import { textOfBytes } from "../edit/snapshot.js";

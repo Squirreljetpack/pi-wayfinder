@@ -19,3 +19,8 @@ export function stripLineNumbers(text: string): string {
     .map((line) => line.replace(NUMBERED_LINE_PREFIX, ""))
     .join("\n");
 }
+
+/** Numbered or raw, depending on whether the caller asked for line numbers. */
+export function formatLine(lineNumber: number, content: string, numbered: boolean | undefined): string {
+  return numbered ? formatNumberedLine(lineNumber, content) : content;
+}
