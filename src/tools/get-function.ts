@@ -235,15 +235,19 @@ export function getRegexFunction(
   requestedPath: string,
   name: string,
   numbered: boolean | undefined,
+  surrounding = 0,
 ): string {
   const lines = content.split(/\r?\n/);
   const range = findFunctionRange(lines, name);
 
   if (!range) return `${requestedPath}::${name}\nNot found.`;
 
-  const [start, end] = range;
-  const body = lines.slice(start, end + 1);
-  const formattedBody = body.map((line, offset) => formatLine(start + offset + 1, line, numbered)).join("\n");
+  const firstLine = Math.max(0, range[0] - surrounding);
+  const lastLine = Math.min(lines.length - 1, range[1] + surrounding);
+  const formattedBody = lines
+    .slice(firstLine, lastLine + 1)
+    .map((line, offset) => formatLine(firstLine + offset + 1, line, numbered))
+    .join("\n");
   return `${requestedPath}::${name}\n${formattedBody}`;
 }
 
@@ -267,12 +271,13 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
     name: "get_function",
     label: "Get Function",
     description:
-      "After get_file_skeleton, extract implementations of the specific named functions/classes needed for the task. Pass lines: true to number each line.",
+      "After get_file_skeleton, extract implementations of the specific named functions/classes needed for the task. Pass lines: true to number each line, context: N for extra surrounding lines.",
     promptSnippet: "Use get_function after get_file_skeleton to read only the relevant implementations.",
     promptGuidelines: [
       "Prefer get_function after a skeleton has identified the symbols relevant to the task.",
       "Use read only if the needed context is not represented by a symbol or a narrow line range is clearer.",
-      "Pass lines: true when the next step is a line edit, so edit's lines mode can use the numbers."
+      "Pass lines: true when the next step is a line edit, so edit's lines mode can use the numbers.",
+      "Pass context: N to print N extra lines before and after each symbol body."
     ],
     parameters: GetFunctionSchema,
     renderCall(args, theme) {
@@ -296,7 +301,10 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
 
         let astResult: GetFunctionsResult | null = null;
         try {
-          astResult = await SymbolLocator.getFunctions(absolutePath, requestedPath, params.function_names, { lines: params.lines });
+          astResult = await SymbolLocator.getFunctions(absolutePath, requestedPath, params.function_names, {
+            lines: params.lines,
+            context: params.context,
+          });
         } catch {
           astResult = null;
         }
@@ -324,7 +332,7 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
             appendOutputLine(output, "");
           }
 
-          appendText(output, getRegexFunction(content, absolutePath, requestedPath, name, params.lines));
+          appendText(output, getRegexFunction(content, absolutePath, requestedPath, name, params.lines, params.context));
           hasOutput = true;
         }
       }

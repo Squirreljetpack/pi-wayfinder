@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerGetFileSkeletonTool } from "../src/tools/get-file-skeleton.js";
-import { registerGetFunctionTool } from "../src/tools/get-function.js";
+import { getRegexFunction, registerGetFunctionTool } from "../src/tools/get-function.js";
 
  type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
 
@@ -51,6 +51,18 @@ function registerFunctionToolForTest(): RegisteredTool {
 }
 
 describe("AST read tools", () => {
+  it("widens the regex fallback by the requested context", () => {
+    const content = ["const above = 1;", "function pick() {", "  return 2;", "}", "const below = 3;"].join("\n");
+
+    const plain = getRegexFunction(content, "sample.xyz", "sample.xyz", "pick", false);
+    const wide = getRegexFunction(content, "sample.xyz", "sample.xyz", "pick", true, 1);
+
+    expect(plain).toBe("sample.xyz::pick\nfunction pick() {\n  return 2;\n}");
+    expect(wide).toBe(
+      "sample.xyz::pick\n1│const above = 1;\n2│function pick() {\n3│  return 2;\n4│}\n5│const below = 3;",
+    );
+  });
+
   afterEach(async () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });

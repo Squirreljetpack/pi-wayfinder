@@ -15,7 +15,7 @@ be undone — by the agent or from `/rewind`.
 | `edit` | One transactional call, many edits, many files. Modes `exact`, `between`, `lines`. Replaces the built-in `edit`. |
 | `rewind` | Browses the recorded file history per file and undoes or restores a transaction's changes. |
 | `get_file_skeleton` | Compact outline of functions, classes, methods and exports. `lines: true` numbers every line. |
-| `get_function` | Full bodies of the requested symbols with their local imports and class context. `lines: true` numbers every line. |
+| `get_function` | Full bodies of the requested symbols with their local imports and class context. `lines: true` numbers every line; `context: N` adds N lines before and after. |
 | `replace_symbol` | Replace a whole function/method/class/interface by tree-sitter range; `text: ""` deletes it. |
 | `insert_symbol` | Insert code before or after a named symbol, doc comment included. |
 | `find_symbol_references` | Exact tree-sitter definitions and references across paths. |

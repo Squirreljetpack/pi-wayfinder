@@ -73,6 +73,34 @@ describe("tree-sitter AST read tool integration", () => {
     expect(text).not.toContain("return 1;");
   });
 
+  it("prints surrounding lines when context is requested", async () => {
+    const cwd = await createTempDir();
+    await writeFile(
+      join(cwd, "sample.ts"),
+      ["const SENTINEL_ABOVE = 1;", "function pick() {", "  return 2;", "}", "const SENTINEL_BELOW = 3;"].join("\n"),
+      "utf8",
+    );
+
+    const tool = registerFunctionToolForTest();
+    const plain = await tool.execute("call-c1", { paths: ["sample.ts"], function_names: ["pick"] }, undefined, undefined, {
+      cwd,
+    } as never);
+    const wide = await tool.execute(
+      "call-c2",
+      { paths: ["sample.ts"], function_names: ["pick"], lines: true, context: 1 },
+      undefined,
+      undefined,
+      { cwd } as never,
+    );
+    const plainText = plain.content[0]?.type === "text" ? plain.content[0].text : "";
+    const wideText = wide.content[0]?.type === "text" ? wide.content[0].text : "";
+
+    expect(plainText).not.toContain("SENTINEL_ABOVE");
+    expect(plainText).not.toContain("SENTINEL_BELOW");
+    expect(wideText).toContain("1│const SENTINEL_ABOVE = 1;\n2│function pick() {");
+    expect(wideText).toContain("4│}\n5│const SENTINEL_BELOW = 3;");
+  });
+
   it("prints raw source unless lines: true is given", async () => {
     const cwd = await createTempDir();
     const source = ["class Service {", "  run() {", "    return 1;", "  }", "}"].join("\n");

@@ -109,6 +109,13 @@ export const GetFunctionSchema = Type.Object({
 			description: "Prefix each output line with its line number, for use with edit's lines mode",
 		}),
 	),
+	context: Type.Optional(
+		Type.Integer({
+			minimum: 0,
+			maximum: 200,
+			description: "Extra lines to print before and after each symbol body",
+		}),
+	),
 });
 
 export const ReplaceSymbolSchema = Type.Object({

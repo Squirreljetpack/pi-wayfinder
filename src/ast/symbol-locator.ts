@@ -59,7 +59,7 @@ export class SymbolLocator {
     absolutePath: string,
     relPath: string,
     functionNames: string[],
-    options?: { lines?: boolean },
+    options?: { lines?: boolean; context?: number },
   ): Promise<GetFunctionsResult | null> {
     let languageParsers;
     try {
@@ -129,8 +129,7 @@ export class SymbolLocator {
       if (seenRanges.has(rangeKey)) continue;
       seenRanges.add(rangeKey);
 
-      const defText = fileContent.slice(startIndex, endIndex);
-      const defLines = defText.split(/\r?\n/);
+      const bodyLines = fileContent.slice(startIndex, endIndex).split(/\r?\n/);
       const context = await SymbolContextResolver.resolve({
         node: defCapture.node,
         fileContent,
@@ -139,8 +138,13 @@ export class SymbolLocator {
         lines: options?.lines,
         rootNode: tree.rootNode,
       });
-      const formatted = defLines
-        .map((line, index) => formatLine(startLine + index + 1, line, options?.lines))
+      const surrounding = options?.context ?? 0;
+      const fileLines = fileContent.split(/\r?\n/);
+      const firstLine = Math.max(0, startLine - surrounding);
+      const lastLine = Math.min(fileLines.length - 1, startLine + bodyLines.length - 1 + surrounding);
+      const formatted = fileLines
+        .slice(firstLine, lastLine + 1)
+        .map((line, index) => formatLine(firstLine + index + 1, line, options?.lines))
         .join("\n");
 
       fileResults.push(`${relPath}::${fullName}\n${context}${formatted}`);
