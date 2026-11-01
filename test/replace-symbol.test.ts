@@ -623,6 +623,25 @@ describe("replace_symbol deletion", () => {
     await expect(readFile(join(cwd, "sample.ts"), "utf8")).resolves.toBe("export function target() {}\n");
   });
 
+  it("finds references for a target outside cwd instead of failing open", async () => {
+    const cwd = await createTempDir();
+    const project = await createTempDir();
+    await writeFile(join(project, "sample.ts"), "export function target() {}\n", "utf8");
+    await writeFile(join(project, "caller.ts"), "target();\n", "utf8");
+
+    const tool = registerToolForTest();
+    const refusal = tool.execute(
+      "call-outside",
+      deleteCall(join(project, "sample.ts"), "target"),
+      undefined,
+      undefined,
+      { cwd } as never,
+    );
+
+    await expect(refusal).rejects.toThrow(/Refusing to delete 'target' from .*sample\.ts: 1 surviving reference found\./);
+    await expect(readFile(join(project, "sample.ts"), "utf8")).resolves.toBe("export function target() {}\n");
+  });
+
   it("deletes despite references when force is set", async () => {
     const cwd = await createTempDir();
     await writeFile(join(cwd, "sample.ts"), "export function target() {}\n", "utf8");

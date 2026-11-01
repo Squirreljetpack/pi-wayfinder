@@ -233,7 +233,7 @@ export function resolveEdit(text: string, spec: EditSpec): ResolvedSpec {
   if (ranges.length === 0) {
     const needle = normalizeToLF(spec.old ?? spec.start ?? "");
     throw new Error(
-      `No match for edits on ${spec.path} (mode "${mode}"):\n  searched for: ${JSON.stringify(needle.slice(0, 120))}\n  the file contains ${text.split("\n").length} lines; re-read it and copy the text exactly`,
+      `No match for edits on ${spec.path} (mode "${mode}"):\n  searched for: ${JSON.stringify(needle.slice(0, 120))}\n  the file contains ${text.endsWith("\n") ? text.split("\n").length - 1 : text.split("\n").length} lines; re-read it and copy the text exactly`,
     );
   }
 

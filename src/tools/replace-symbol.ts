@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { SymbolLocator, type SymbolRange } from "../ast/symbol-locator.js";
 import { combineDiffs, createUnifiedDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
@@ -186,6 +187,34 @@ export function applyResolvedSymbolReplacements(
   return nextContent;
 }
 
+/**
+ * Directories the delete pre-check scans. `ctx.cwd` covers the normal case; a target outside it
+ * contributes its project root (nearest ancestor holding `.git`) so a same-project call site is not
+ * missed just because the file was named by absolute path.
+ */
+export function scanRootsFor(absolutePaths: string[], cwd: string): string[] {
+  const roots = new Set<string>([cwd]);
+  for (const absolutePath of absolutePaths) {
+    roots.add(nearestProjectRoot(absolutePath) ?? dirname(absolutePath));
+  }
+  const kept: string[] = [];
+  for (const root of Array.from(roots).sort((a, b) => a.length - b.length)) {
+    if (!kept.some((parent) => root === parent || root.startsWith(parent + sep))) kept.push(root);
+  }
+  return kept;
+}
+
+function nearestProjectRoot(absolutePath: string): string | null {
+  let dir = dirname(absolutePath);
+  for (let depth = 0; depth < 40; depth++) {
+    if (existsSync(join(dir, ".git"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
 export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScanner): void {
   pi.registerTool({
     name: "replace_symbol",
@@ -222,8 +251,11 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
         const preparedBatches: PreparedFileReplacementBatch[] = [];
         let locations: SymbolLocation[] | undefined;
 
+        const scanRoots = scanRootsFor(batches.map((batch) => batch.absolutePath), ctx.cwd);
         const scanForDeletes = async (): Promise<SymbolLocation[]> => {
-          locations ??= await scanner.scanPaths([ctx.cwd], ctx.cwd, signal);
+          locations ??= (
+            await Promise.all(scanRoots.map((root) => scanner.scanPaths([root], ctx.cwd, signal)))
+          ).flat();
           return locations;
         };
 

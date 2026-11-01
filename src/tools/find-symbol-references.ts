@@ -44,6 +44,7 @@ async function formatLocations(locations: SymbolLocation[], surrounding = 0): Pr
   for (const [absolutePath, fileLocations] of sortedFiles) {
     const content = await readFile(absolutePath, "utf8");
     const lines = content.split(/\r?\n/);
+    const lastLineIndex = lines.length - 1 - (content.endsWith("\n") ? 1 : 0);
     const merged = new Map<number, Set<string>>();
 
     for (const location of fileLocations.sort((a, b) => a.startLine - b.startLine || a.startColumn - b.startColumn)) {
@@ -58,7 +59,7 @@ async function formatLocations(locations: SymbolLocation[], surrounding = 0): Pr
     const hits = Array.from(merged.entries()).sort((a, b) => a[0] - b[0]);
     const wanted = new Set<number>();
     for (const [lineIndex] of hits) {
-      for (let index = Math.max(0, lineIndex - surrounding); index <= Math.min(lines.length - 1, lineIndex + surrounding); index++) {
+      for (let index = Math.max(0, lineIndex - surrounding); index <= Math.min(lastLineIndex, lineIndex + surrounding); index++) {
         wanted.add(index);
       }
     }
