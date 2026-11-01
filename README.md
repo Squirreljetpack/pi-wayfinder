@@ -112,6 +112,24 @@ git --git-dir ~/.cache/pi-wayfinder/history.git show --stat <id>
 git --git-dir ~/.cache/pi-wayfinder/history.git log -p -- home/me/app/a.ts
 ```
 
+### Pruning the store
+
+`/prune-rewind` (interactive, asks first) scrubs the records of files that no longer exist and can
+drop old transactions:
+
+```
+/prune-rewind            # forget files that have been deleted or moved
+/prune-rewind 7d         # also drop transactions older than 7 days
+/prune-rewind 2026-10-01 # ... or older than that date
+/prune-rewind all        # ... or every transaction
+```
+
+Surviving transactions keep their content, message, dates and order but are re-created with the
+pruned entries removed, so their ids change and ids quoted in older transcripts stop resolving. The
+old commits become unreachable and are garbage-collected, which is what actually reclaims the space.
+The check for missing files uses this machine's filesystem, so a store copied from another machine
+loses records for paths that only exist there.
+
 ## Install
 
 ```bash

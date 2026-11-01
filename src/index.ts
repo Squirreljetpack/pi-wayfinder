@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerPruneRewindCommand } from "./commands/prune-rewind.js";
 import { registerRewindCommand } from "./commands/rewind.js";
 import { registerEditTool } from "./edit/tool.js";
 import { getWayfinderPromptGuidance } from "./prompt.js";
@@ -19,6 +20,7 @@ export default function wayfinderExtension(pi: ExtensionAPI): void {
 	registerEditTool(pi);
 	registerRewindTool(pi);
 	registerRewindCommand(pi);
+	registerPruneRewindCommand(pi);
 	registerGetFileSkeletonTool(pi);
 	registerGetFunctionTool(pi);
 	registerReplaceSymbolTool(pi, symbolScanner);

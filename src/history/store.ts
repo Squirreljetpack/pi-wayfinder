@@ -30,11 +30,11 @@ export const HISTORY_BRANCH = "refs/heads/main";
 const PREIMAGE_PREFIX = ".pi-wayfinder";
 
 /** Pathspec that matches this exact path, not its glob interpretation. */
-function literal(repoPath: string): string {
+export function literal(repoPath: string): string {
   return `:(literal)${repoPath}`;
 }
 
-function preimagePath(repoPath: string): string {
+export function preimagePath(repoPath: string): string {
   return `${PREIMAGE_PREFIX}/${repoPath}`;
 }
 
@@ -130,13 +130,13 @@ export interface TrackedFile {
   lastChangedAt: number;
 }
 
-interface GitResult {
+export interface GitResult {
   code: number;
   stdout: Buffer;
   stderr: string;
 }
 
-interface GitOptions {
+export interface GitOptions {
   input?: string | Buffer;
   env?: Record<string, string>;
   allowFailure?: boolean;
@@ -174,7 +174,7 @@ function runGit(args: string[], options: GitOptions = {}): Promise<GitResult> {
   });
 }
 
-function git(repo: string, args: string[], options: GitOptions = {}): Promise<GitResult> {
+export function git(repo: string, args: string[], options: GitOptions = {}): Promise<GitResult> {
   return runGit(["--git-dir", repo, ...args], options);
 }
 
@@ -191,7 +191,7 @@ async function projectBranch(cwd: string): Promise<string | null> {
   return detached.code === 0 && sha.length > 0 ? `(detached ${sha})` : null;
 }
 
-function text(result: GitResult): string {
+export function text(result: GitResult): string {
   return result.stdout.toString("utf-8");
 }
 
@@ -207,7 +207,7 @@ async function initRepo(repo: string): Promise<void> {
   }
 }
 
-async function ensureRepo(repo: string): Promise<void> {
+export async function ensureRepo(repo: string): Promise<void> {
   const existing = ensuredRepos.get(repo);
   if (existing) return existing;
   const pending = initRepo(repo).catch((error: unknown) => {
