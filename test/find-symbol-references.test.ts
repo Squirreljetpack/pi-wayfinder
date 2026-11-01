@@ -54,6 +54,36 @@ describe("find_symbol_references tool", () => {
     expect(text).toMatch(/\(greet\) 4│const message = greet/);
   });
 
+  it("prints surrounding lines and elides the gaps between hits", async () => {
+    const cwd = await createTempDir();
+    await writeFile(join(cwd, "sample.ts"), [
+      "const first = 1;",
+      "export function greet() {",
+      "  return 2;",
+      "}",
+      "",
+      "",
+      "const message = greet();",
+    ].join("\n"), "utf8");
+
+    const tool = registerToolForTest();
+    const result = await tool.execute(
+      "call-ctx",
+      { paths: ["sample.ts"], symbols: ["greet"], context: 1 },
+      undefined,
+      undefined,
+      { cwd } as never,
+    );
+    const text = result.content[0].text || "";
+
+    expect(text).toContain("  1│const first = 1;");
+    expect(text).toContain("  (greet) 2│export function greet() {");
+    expect(text).toContain("  3│  return 2;");
+    expect(text).not.toContain("4│}");
+    expect(text).toContain("  ...");
+    expect(text).toContain("  (greet) 7│const message = greet();");
+  });
+
   it("filters definitions only and references only", async () => {
     const cwd = await createTempDir();
     await writeFile(join(cwd, "sample.ts"), [

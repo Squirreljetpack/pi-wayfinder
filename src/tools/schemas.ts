@@ -179,6 +179,13 @@ export const FindSymbolReferencesSchema = Type.Object({
 	symbols: Type.Array(
 		Type.String({ description: "Exact symbol names to find" }),
 	),
+	context: Type.Optional(
+		Type.Integer({
+			minimum: 0,
+			maximum: 200,
+			description: "Lines to print before and after each hit, like grep -C",
+		}),
+	),
 	find_type: Type.Optional(
 		Type.Union([
 			Type.Literal("definition"),

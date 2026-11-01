@@ -18,7 +18,7 @@ be undone — by the agent or from `/rewind`.
 | `get_function` | Full bodies of the requested symbols with their local imports and class context. `lines: true` numbers every line; `context: N` adds N lines before and after. |
 | `replace_symbol` | Replace a whole function/method/class/interface by tree-sitter range; `text: ""` deletes it. |
 | `insert_symbol` | Insert code before or after a named symbol, doc comment included. |
-| `find_symbol_references` | Exact tree-sitter definitions and references across paths. |
+| `find_symbol_references` | Exact tree-sitter definitions and references across paths. `context: N` prints N lines around each hit. |
 | `rename_symbol` | Rename definitions and references together across files. |
 
 ## Editing

@@ -26,7 +26,7 @@ function filterLocations(locations: SymbolLocation[], symbols: string[], findTyp
   });
 }
 
-async function formatLocations(locations: SymbolLocation[]): Promise<string> {
+async function formatLocations(locations: SymbolLocation[], surrounding = 0): Promise<string> {
   const byFile = new Map<string, SymbolLocation[]>();
   for (const location of locations) {
     const fileLocations = byFile.get(location.absolutePath) || [];
@@ -54,8 +54,22 @@ async function formatLocations(locations: SymbolLocation[]): Promise<string> {
 
     const displayPath = fileLocations[0]?.displayPath || absolutePath;
     output.push(`${displayPath}:`);
-    for (const [lineIndex, symbols] of Array.from(merged.entries()).sort((a, b) => a[0] - b[0])) {
-      output.push(`  (${Array.from(symbols).join(", ")}) ${formatNumberedLine(lineIndex + 1, lines[lineIndex] ?? "").trim()}`);
+
+    const hits = Array.from(merged.entries()).sort((a, b) => a[0] - b[0]);
+    const wanted = new Set<number>();
+    for (const [lineIndex] of hits) {
+      for (let index = Math.max(0, lineIndex - surrounding); index <= Math.min(lines.length - 1, lineIndex + surrounding); index++) {
+        wanted.add(index);
+      }
+    }
+
+    let previous: number | null = null;
+    for (const lineIndex of Array.from(wanted).sort((a, b) => a - b)) {
+      if (previous !== null && lineIndex > previous + 1) output.push("  ...");
+      const symbols = merged.get(lineIndex);
+      const numbered = formatNumberedLine(lineIndex + 1, lines[lineIndex] ?? "").trim();
+      output.push(symbols ? `  (${Array.from(symbols).join(", ")}) ${numbered}` : `  ${numbered}`);
+      previous = lineIndex;
     }
     output.push("");
   }
@@ -67,11 +81,13 @@ export function registerFindSymbolReferencesTool(pi: ExtensionAPI, scanner: Symb
   pi.registerTool({
     name: "find_symbol_references",
     label: "Find Symbol References",
-    description: "Find exact tree-sitter definitions and references for one or more symbols across files or directories.",
+    description:
+      "Find exact tree-sitter definitions and references for one or more symbols across files or directories. Pass context: N to print N lines around each hit.",
     promptSnippet: "Find exact AST definitions/references of symbols across paths with line-numbered source lines.",
     promptGuidelines: [
       "Use find_symbol_references before rename_symbol when you need to inspect where a symbol appears.",
-      "Use find_symbol_references with narrow paths when possible to avoid broad symbol scans."
+      "Use find_symbol_references with narrow paths when possible to avoid broad symbol scans.",
+      "Pass context: N when a single hit line is not enough to judge how the symbol is used."
     ],
     parameters: FindSymbolReferencesSchema,
     renderCall(args, theme) {
@@ -92,7 +108,8 @@ export function registerFindSymbolReferencesTool(pi: ExtensionAPI, scanner: Symb
 
       const locations = await scanner.scanPaths(paths, ctx.cwd, signal);
       const hits = filterLocations(locations, symbols, findType);
-      const text = hits.length > 0 ? await formatLocations(hits) : missingMessage(findType, symbols);
+      const surrounding = Math.max(0, Math.min(params.context ?? 0, 200));
+      const text = hits.length > 0 ? await formatLocations(hits, surrounding) : missingMessage(findType, symbols);
 
       return {
         content: [{ type: "text", text }],
