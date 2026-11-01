@@ -17,7 +17,7 @@ Editing:
   - "between" when the region is large: name it with its surrounding delimiters instead of retyping it, and set include_delimiters to replace those delimiters too.
   - "lines" when you already read the file in this session and know the line numbers.
 - Batch all edits for a task into one edit call; entries may span multiple files. Edits are matched against the original file, so do not compensate for edits made earlier in the same call.
-- Every edit returns a transaction id. If an edit went wrong, do not hand-repair it: rewind({ id, mode: "show" }) shows what it changed, mode "undo" reverts it, mode "restore" puts the files back to that transaction's version.
+- Every write (edit, replace_symbol, insert_symbol, rename_symbol) returns a transaction id. If one went wrong, do not hand-repair it: rewind({ id, mode: "show" }) shows what it changed, mode "undo" reverts it, mode "restore" puts the files back to that transaction's version.
 - rewind({}) lists files with recorded history in the working directory and rewind({ path }) lists one file's versions, so you can also walk further back than the last edit.
 
 Symbol navigation:

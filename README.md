@@ -53,7 +53,8 @@ stripped from replacement text, so pasting numbered lines cannot inject the gutt
 
 ### File history
 
-Every successful edit returns a transaction id, which is the id of the commit that records it:
+Every write this package makes — `edit`, `replace_symbol`, `insert_symbol` and `rename_symbol` —
+returns a transaction id, which is the id of the commit that records it:
 
 ```
 Updated 2 files: 5 edits, 7 replacements.

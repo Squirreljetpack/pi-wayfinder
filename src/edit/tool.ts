@@ -8,7 +8,7 @@ import {
   withFileMutationQueues,
   type TextSnapshot,
 } from "./snapshot.js";
-import { recordAndWriteLocked } from "../history/restore.js";
+import { recordAndWriteLocked, undoHint } from "../history/restore.js";
 import { expandPath } from "../paths.js";
 import { createPiDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
@@ -192,13 +192,10 @@ export function registerEditTool(pi: ExtensionAPI): void {
             transactionId: report.commitId,
           };
 
-          const shortId = report.commitId?.slice(0, 12);
-          const transactionLine =
-            shortId === undefined
-              ? "\n(History unavailable: this edit cannot be undone.)"
-              : `\nTransaction ${shortId} — undo with rewind({ id: "${shortId}", mode: "undo" })`;
-
-          return { content: [{ type: "text" as const, text: `${summarize(staged)}${transactionLine}` }], details };
+          return {
+            content: [{ type: "text" as const, text: `${summarize(staged)}${undoHint(report.commitId)}` }],
+            details,
+          };
         },
       );
     },

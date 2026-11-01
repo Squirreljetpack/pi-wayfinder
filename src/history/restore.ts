@@ -37,6 +37,30 @@ export interface WriteReport {
 
 export class RestoreConflictError extends Error {}
 
+/** The parts of a tool context that a transaction records about the session. */
+export interface SessionSource {
+  sessionManager?: {
+    getSessionId?: () => string | undefined;
+    getSessionDir?: () => string | undefined;
+    getSessionFile?: () => string | undefined;
+  };
+}
+
+export function sessionOf(ctx: SessionSource): HistorySession {
+  return {
+    id: ctx.sessionManager?.getSessionId?.(),
+    dir: ctx.sessionManager?.getSessionDir?.(),
+    file: ctx.sessionManager?.getSessionFile?.(),
+  };
+}
+
+/** The model-facing line that tells the caller how to undo the transaction just recorded. */
+export function undoHint(commitId: string | null): string {
+  if (commitId === null) return "\n(History unavailable: this change cannot be undone.)";
+  const shortId = commitId.slice(0, 12);
+  return `\nTransaction ${shortId} — undo with rewind({ id: "${shortId}", mode: "undo" })`;
+}
+
 /**
  * Records a transaction, then writes every file from the content of the commit it just created.
  *

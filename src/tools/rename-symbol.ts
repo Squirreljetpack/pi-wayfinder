@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import { readFile, writeFile } from "node:fs/promises";
+import { readSnapshot, type TextSnapshot } from "../edit/snapshot.js";
+import { recordAndWriteLocked, sessionOf, undoHint } from "../history/restore.js";
 import { combineDiffs, createUnifiedDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
 import type { SymbolLocation, SymbolScanner } from "../symbols/symbol-scanner.js";
@@ -17,6 +18,8 @@ export interface RenameLocation {
 interface PreparedRenameFile {
   absolutePath: string;
   displayPath: string;
+  snapshot: TextSnapshot;
+  after: Buffer;
   finalContent: string;
   replacementCount: number;
   diff: DiffDetails;
@@ -127,12 +130,14 @@ export function registerRenameSymbolTool(pi: ExtensionAPI, scanner: SymbolScanne
       }
 
       const byFile = groupLocationsByFile(locations);
+      let undoLine = "";
       const preparedFiles = await withFileMutationQueues(Array.from(byFile.keys()), async () => {
         const prepared: PreparedRenameFile[] = [];
 
         for (const [absolutePath, fileLocations] of Array.from(byFile.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
           throwIfAborted(signal);
-          const originalContent = await readFile(absolutePath, { encoding: "utf8", signal });
+          const snapshot = await readSnapshot(absolutePath, ctx.cwd);
+          const originalContent = snapshot.raw.toString("utf-8");
           const renameLocations = fileLocations.map((location) => ({
             startLine: location.startLine,
             startColumn: location.startColumn,
@@ -145,15 +150,32 @@ export function registerRenameSymbolTool(pi: ExtensionAPI, scanner: SymbolScanne
           prepared.push({
             absolutePath,
             displayPath,
+            snapshot,
+            after: Buffer.from(finalContent, "utf-8"),
             finalContent,
             replacementCount,
             diff: createUnifiedDiff(displayPath, originalContent, finalContent)
           });
         }
 
+        const report = await recordAndWriteLocked(
+          prepared.map((file) => ({
+            snapshot: file.snapshot,
+            after: file.after,
+            summary: `renamed ${file.replacementCount} occurrence(s)`,
+          })),
+          {
+            cwd: ctx.cwd,
+            kind: "rename_symbol",
+            headline: `Renamed '${existingSymbol}' to '${newSymbol}' in ${prepared.length} ${prepared.length === 1 ? "file" : "files"}.`,
+            session: sessionOf(ctx),
+            signal,
+          },
+        );
+        undoLine = undoHint(report.commitId);
+
         for (const file of prepared) {
           throwIfAborted(signal);
-          await writeFile(file.absolutePath, file.finalContent, { encoding: "utf8", signal });
           scanner.invalidate(file.absolutePath);
         }
 
@@ -164,7 +186,7 @@ export function registerRenameSymbolTool(pi: ExtensionAPI, scanner: SymbolScanne
       const diffs = preparedFiles.map((file) => file.diff).filter((diff) => diff.diff.length > 0);
       const fileLabel = preparedFiles.length === 1 ? "file" : "files";
       return {
-        content: [{ type: "text", text: `Successfully renamed symbol '${existingSymbol}' to '${newSymbol}' (${totalReplacements} occurrences in ${preparedFiles.length} ${fileLabel}).` }],
+        content: [{ type: "text", text: `Successfully renamed symbol '${existingSymbol}' to '${newSymbol}' (${totalReplacements} occurrences in ${preparedFiles.length} ${fileLabel}).${undoLine}` }],
         details: {
           paths,
           existing_symbol: existingSymbol,

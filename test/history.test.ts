@@ -15,7 +15,12 @@ import {
   resolveTransactionId,
   toRepoPath,
 } from "../src/history/store.js";
+import { registerInsertSymbolTool } from "../src/tools/insert-symbol.js";
+import { registerRenameSymbolTool } from "../src/tools/rename-symbol.js";
+import { registerReplaceSymbolTool } from "../src/tools/replace-symbol.js";
 import { registerRewindTool } from "../src/tools/rewind.js";
+import { SymbolCache } from "../src/symbols/symbol-cache.js";
+import { SymbolScanner } from "../src/symbols/symbol-scanner.js";
 
 type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
 
@@ -285,6 +290,44 @@ describe("rewind tool listings", () => {
     // The newest transaction changed one line; the oldest is where the file entered history.
     expect([entries[0].added, entries[0].deleted]).toEqual([1, 1]);
     expect(entries[1].added).toBeGreaterThan(1);
+  });
+
+  it("records a transaction for every symbol-level edit", async () => {
+    const cwd = await createTempDir();
+    const filePath = join(cwd, "sample.ts");
+    await writeFile(
+      filePath,
+      "export function alpha() { return 1; }\nexport const caller = () => alpha();\n",
+      "utf8",
+    );
+    const scanner = new SymbolScanner(new SymbolCache());
+    const hint = /Transaction [0-9a-f]{12} — undo with rewind\(\{ id: "[0-9a-f]{12}", mode: "undo" \}\)/;
+
+    const replaced = await collect((pi) => registerReplaceSymbolTool(pi as ExtensionAPI, scanner)).execute(
+      "call-replace",
+      { replacements: [{ path: "sample.ts", symbol: "alpha", text: "export function alpha() { return 2; }" }] },
+      undefined,
+      undefined,
+      { cwd } as never,
+    );
+    const inserted = await collect((pi) => registerInsertSymbolTool(pi as ExtensionAPI)).execute(
+      "call-insert",
+      { insertions: [{ path: "sample.ts", symbol: "alpha", position: "after", text: "export const added = 3;" }] },
+      undefined,
+      undefined,
+      { cwd } as never,
+    );
+    const renamed = await collect((pi) => registerRenameSymbolTool(pi as ExtensionAPI, scanner)).execute(
+      "call-rename",
+      { paths: ["sample.ts"], existing_symbol: "caller", new_symbol: "consumer" },
+      undefined,
+      undefined,
+      { cwd } as never,
+    );
+
+    for (const result of [replaced, inserted, renamed]) expect(textOf(result)).toMatch(hint);
+    expect(await listVersions(filePath)).toHaveLength(3);
+    expect((await listVersions(filePath))[0].subject).toContain("Renamed 'caller' to 'consumer'");
   });
 
   it("says so when nothing is recorded", async () => {

@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readSnapshot, type TextSnapshot } from "../edit/snapshot.js";
+import { recordAndWriteLocked, sessionOf, undoHint } from "../history/restore.js";
 import { dirname, resolve } from "node:path";
 import { SymbolLocator, type SymbolRange } from "../ast/symbol-locator.js";
 import { combineDiffs, createUnifiedDiff, type DiffDetails } from "../rendering/diff-output.js";
@@ -48,6 +49,8 @@ function missingSymbolMessage(insertion: SymbolInsertion): string {
 
 export interface PreparedFileInsertionBatch {
   batch: FileInsertionBatch;
+  snapshot: TextSnapshot;
+  after: Buffer;
   finalContent: string;
   diff: DiffDetails;
 }
@@ -120,6 +123,15 @@ export function applyResolvedSymbolInsertions(
   return nextContent;
 }
 
+function summarizeInsertionBatches(
+  preparedBatches: PreparedFileInsertionBatch[],
+  insertions: SymbolInsertion[],
+): string {
+  const count = insertions.length;
+  const files = preparedBatches.length;
+  return `Inserted ${count} ${count === 1 ? "symbol" : "symbols"} in ${files} ${files === 1 ? "file" : "files"}.`;
+}
+
 export function registerInsertSymbolTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "insert_symbol",
@@ -155,13 +167,15 @@ export function registerInsertSymbolTool(pi: ExtensionAPI): void {
       const batches = groupInsertionsByPath(insertions, ctx.cwd);
       const summaries: string[] = [];
       let diffs: DiffDetails[] = [];
+      let undoLine = "";
 
       await withFileMutationQueues(batches.map((batch) => batch.absolutePath), async () => {
         const preparedBatches: PreparedFileInsertionBatch[] = [];
 
         for (const batch of batches) {
           throwIfAborted(signal);
-          const originalContent = await readFile(batch.absolutePath, { encoding: "utf8", signal });
+          const snapshot = await readSnapshot(batch.absolutePath, ctx.cwd);
+          const originalContent = snapshot.raw.toString("utf-8");
           const lineEnding = detectLineEnding(originalContent);
 
           const resolved: ResolvedSymbolInsertion[] = [];
@@ -176,6 +190,8 @@ export function registerInsertSymbolTool(pi: ExtensionAPI): void {
           const finalContent = applyResolvedSymbolInsertions(originalContent, resolved, lineEnding);
           preparedBatches.push({
             batch,
+            snapshot,
+            after: Buffer.from(finalContent, "utf-8"),
             finalContent,
             diff: createUnifiedDiff(batch.displayPath, originalContent, finalContent),
           });
@@ -183,12 +199,26 @@ export function registerInsertSymbolTool(pi: ExtensionAPI): void {
 
         diffs = preparedBatches.map((prepared) => prepared.diff).filter((diff) => diff.diff.length > 0);
 
+        const report = await recordAndWriteLocked(
+          preparedBatches.map((prepared) => ({
+            snapshot: prepared.snapshot,
+            after: prepared.after,
+            summary: prepared.batch.insertions
+              .map((insertion) => `inserted ${insertion.position} '${insertion.symbol}'`)
+              .join(", "),
+          })),
+          {
+            cwd: ctx.cwd,
+            kind: "insert_symbol",
+            headline: summarizeInsertionBatches(preparedBatches, insertions),
+            session: sessionOf(ctx),
+            signal,
+          },
+        );
+        undoLine = undoHint(report.commitId);
+
         for (const prepared of preparedBatches) {
           throwIfAborted(signal);
-          await mkdir(dirname(prepared.batch.absolutePath), { recursive: true });
-          throwIfAborted(signal);
-          await writeFile(prepared.batch.absolutePath, prepared.finalContent, { encoding: "utf8", signal });
-
           const labelList = prepared.batch.insertions
             .map((insertion) => `'${insertion.symbol}' (${insertion.position})`)
             .join(", ");
@@ -197,7 +227,7 @@ export function registerInsertSymbolTool(pi: ExtensionAPI): void {
       });
 
       return {
-        content: [{ type: "text", text: summaries.join("\n\n") }],
+        content: [{ type: "text", text: `${summaries.join("\n\n")}${undoLine}` }],
         details: {
           paths: batches.map((batch) => batch.displayPath),
           symbols: insertions.map((insertion) => insertion.symbol),

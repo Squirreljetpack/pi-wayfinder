@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionToolContext } from "@earendil-works/pi-coding-agent";
 import { truncateHead } from "@earendil-works/pi-coding-agent";
-import { restoreTransaction, undoTransaction } from "../history/restore.js";
+import { restoreTransaction, sessionOf, undoTransaction } from "../history/restore.js";
 import {
   getTransaction,
   listTrackedFiles,
@@ -43,14 +43,6 @@ function timestampOf(at: number): string {
   const date = new Date(at);
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function sessionOf(ctx: ExtensionToolContext) {
-  return {
-    id: ctx.sessionManager?.getSessionId?.(),
-    dir: ctx.sessionManager?.getSessionDir?.(),
-    file: ctx.sessionManager?.getSessionFile?.(),
-  };
 }
 
 /** Numbered file content, capped so a preview cannot flood the context. */

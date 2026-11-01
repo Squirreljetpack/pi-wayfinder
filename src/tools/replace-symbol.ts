@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readSnapshot, type TextSnapshot } from "../edit/snapshot.js";
+import { recordAndWriteLocked, sessionOf, undoHint } from "../history/restore.js";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { SymbolLocator, type SymbolRange } from "../ast/symbol-locator.js";
@@ -117,6 +118,8 @@ export function blockingReferences(
 
 interface PreparedFileReplacementBatch {
   batch: FileReplacementBatch;
+  snapshot: TextSnapshot;
+  after: Buffer;
   finalContent: string;
   diff: DiffDetails;
   summaries: string[];
@@ -215,6 +218,16 @@ function nearestProjectRoot(absolutePath: string): string | null {
   return null;
 }
 
+function summarizeReplacementBatches(
+  preparedBatches: PreparedFileReplacementBatch[],
+  replacements: SymbolReplacement[],
+): string {
+  const edits = replacements.length;
+  const files = preparedBatches.length;
+  const verb = replacements.every((replacement) => replacement.text === "") ? "Deleted" : "Replaced";
+  return `${verb} ${edits} ${edits === 1 ? "symbol" : "symbols"} in ${files} ${files === 1 ? "file" : "files"}.`;
+}
+
 export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScanner): void {
   pi.registerTool({
     name: "replace_symbol",
@@ -245,6 +258,7 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
 
       const batches = groupReplacementsByPath(replacements, ctx.cwd);
       let diffs: DiffDetails[] = [];
+      let undoLine = "";
       const summaries: string[] = [];
 
       await withFileMutationQueues(batches.map((batch) => batch.absolutePath), async () => {
@@ -261,7 +275,8 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
 
         for (const batch of batches) {
           throwIfAborted(signal);
-          const originalContent = await readFile(batch.absolutePath, { encoding: "utf8", signal });
+          const snapshot = await readSnapshot(batch.absolutePath, ctx.cwd);
+          const originalContent = snapshot.raw.toString("utf-8");
           const lineEnding = detectLineEnding(originalContent);
 
           const resolved: ResolvedSymbolReplacement[] = [];
@@ -304,6 +319,8 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
 
           preparedBatches.push({
             batch,
+            snapshot,
+            after: Buffer.from(finalContent, "utf-8"),
             finalContent,
             diff,
             summaries: [
@@ -315,18 +332,31 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
 
         diffs = preparedBatches.map((prepared) => prepared.diff).filter((diff) => diff.diff.length > 0);
 
+        const report = await recordAndWriteLocked(
+          preparedBatches.map((prepared) => ({
+            snapshot: prepared.snapshot,
+            after: prepared.after,
+            summary: prepared.summaries.join(" "),
+          })),
+          {
+            cwd: ctx.cwd,
+            kind: "replace_symbol",
+            headline: summarizeReplacementBatches(preparedBatches, replacements),
+            session: sessionOf(ctx),
+            signal,
+          },
+        );
+        undoLine = undoHint(report.commitId);
+
         for (const prepared of preparedBatches) {
           throwIfAborted(signal);
-          await mkdir(dirname(prepared.batch.absolutePath), { recursive: true });
-          throwIfAborted(signal);
-          await writeFile(prepared.batch.absolutePath, prepared.finalContent, { encoding: "utf8", signal });
           scanner.invalidate(prepared.batch.absolutePath);
           summaries.push(...prepared.summaries);
         }
       });
 
       return {
-        content: [{ type: "text", text: summaries.join("\n") }],
+        content: [{ type: "text", text: `${summaries.join("\n")}${undoLine}` }],
         details: {
           paths: batches.map((batch) => batch.displayPath),
           symbols: replacements.map((replacement) => replacement.symbol),

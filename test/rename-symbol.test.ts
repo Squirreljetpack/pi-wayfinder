@@ -77,7 +77,8 @@ describe("rename_symbol tool", () => {
       "const message = welcome('Ada');",
       "",
     ].join("\n"));
-    expect(result.content[0].text).toBe("Successfully renamed symbol 'greet' to 'welcome' (2 occurrences in 1 file).");
+    expect(result.content[0].text).toContain("Successfully renamed symbol 'greet' to 'welcome' (2 occurrences in 1 file).");
+    expect(result.content[0].text).toMatch(/Transaction [0-9a-f]{12} — undo with rewind\(\{ id: "[0-9a-f]{12}", mode: "undo" \}\)/);
   });
 
   it("renames across multiple files", async () => {
