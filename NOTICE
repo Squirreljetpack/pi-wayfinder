@@ -1,0 +1,14 @@
+pi-wayfinder
+
+This project is a fork of the original pi-wayfinder. It contains code and tree-sitter query
+assets that the upstream project adapted from Dirac.
+
+Dirac
+Copyright Dirac Delta Labs
+Licensed under the Apache License, Version 2.0
+Source: https://github.com/dirac-run/dirac
+
+pi-wayfinder (upstream)
+Copyright the pi-wayfinder authors
+Licensed under the Apache License, Version 2.0
+Source: https://github.com/deevus/pi-wayfinder

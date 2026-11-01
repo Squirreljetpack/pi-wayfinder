@@ -1,0 +1,62 @@
+{
+  "name": "pi-wayfinder",
+  "version": "0.1.0",
+  "description": "Structure-aware code navigation and delimiter/line/exact editing tools for pi agents.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "wayfinder",
+    "coding-agent",
+    "code-navigation",
+    "code-editing",
+    "tree-sitter",
+    "ast",
+    "ast-tools",
+    "symbol-search",
+    "symbol-rename",
+    "refactoring",
+    "rollback"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Squirreljetpack/pi-wayfinder.git"
+  },
+  "homepage": "https://github.com/Squirreljetpack/pi-wayfinder",
+  "bugs": {
+    "url": "https://github.com/Squirreljetpack/pi-wayfinder/issues"
+  },
+  "files": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "diff": "^7.0.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.22.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "license": "Apache-2.0"
+}
