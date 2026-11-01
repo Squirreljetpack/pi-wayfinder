@@ -324,6 +324,17 @@ describe("edit between mode", () => {
     expect(applyRanges(text, resolved.ranges)).toBe("A start\nX\nB end\nA end\n");
   });
 
+  it("treats an absent or unclosed delimiter as zero matches when 0 is expected", () => {
+    const text = "open\nnothing after\n";
+
+    expect(
+      resolveEdit(text, spec({ path: "x.ts", mode: "between", start: "nope", end: "close", new: "x", expected_matches: 0 })).ranges,
+    ).toEqual([]);
+    expect(
+      resolveEdit(text, spec({ path: "x.ts", mode: "between", start: "open", end: "close", new: "x", expected_matches: 0 })).ranges,
+    ).toEqual([]);
+  });
+
   it("reports a dangling start delimiter with its line", () => {
     const text = "open\nnothing after\n";
     expect(() => resolveEdit(text, spec({ path: "x.ts", mode: "between", start: "open", end: "close", new: "x" }))).toThrow(

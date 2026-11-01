@@ -3,10 +3,10 @@ export function getWayfinderPromptGuidance(): string {
 ## Wayfinder source editing
 
 Explore before reading:
-1. Start with get_file_skeleton to map functions, classes, methods, and exports, with line numbers, without reading the whole file.
+1. Start with get_file_skeleton to map functions, classes, methods, and exports without reading the whole file.
 2. Use get_function next for the specific definitions you need, with their local imports and class context.
 3. Use read for narrow line ranges, non-symbol context, small/config files, or when skeleton/function output is insufficient; it prints raw file text.
-4. Pass lines: true to get_file_skeleton or get_function when you need line numbers; the gutter is only printed on request. Those numbers are details of the tool output, never part of the file, and they are what lines mode refers to. For a region no tool numbered, get the numbers with bash: grep -n.
+4. Pass lines: true to get_file_skeleton or get_function when you need line numbers; find_symbol_references is always numbered, and for a region no tool numbered, get the numbers with bash: grep -n. The gutter is never part of the file and is stripped from replacement text if pasted.
 
 Editing:
 - Prefer replace_symbol for whole functions, methods, classes, interfaces, or exported const/arrow functions: it replaces the tree-sitter range, doc comment included.
@@ -23,6 +23,5 @@ Editing:
 Symbol navigation:
 - Use find_symbol_references to inspect exact AST definitions and references before broad rename work.
 - Use rename_symbol for exact symbol renames across files or directories; it renames definitions and references together.
-- Tool output lines carry a line-number gutter. The gutter is stripped from replacement text if pasted, but do not add it deliberately.
 `;
 }

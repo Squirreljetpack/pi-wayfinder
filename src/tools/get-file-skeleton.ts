@@ -29,11 +29,11 @@ export function registerGetFileSkeletonTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "get_file_skeleton",
     label: "Get File Skeleton",
-    description: "First-pass source exploration: return a compact outline of functions, classes, methods, and exports before reading full files. Pass lines: true to number each line.",
+    description:
+      "Compact outline of a file's functions, classes, methods, and exports, where |---- marks code the outline skips. Pass lines: true to number each line.",
     promptSnippet: "Use get_file_skeleton first when exploring source code so you can choose targeted get_function reads instead of broad file reads.",
     promptGuidelines: [
       "Call get_file_skeleton before read when you need to understand the structure of a source file.",
-      "After reviewing the skeleton, call get_function for the specific symbols that matter.",
       "Pass lines: true when the next step is a line edit, so edit's lines mode can use the numbers."
     ],
     parameters: GetFileSkeletonSchema,

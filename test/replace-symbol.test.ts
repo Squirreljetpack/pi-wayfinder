@@ -170,6 +170,37 @@ describe("replace_symbol tool", () => {
     expect(result.details?.diff).toContain("+2   return name.toUpperCase();");
   });
 
+  it("refuses a symbol suffix that names several definitions", async () => {
+    const cwd = await createTempDir();
+    const filePath = join(cwd, "sample.ts");
+    const original = [
+      "class Alpha {",
+      "  run() {",
+      "    return 1;",
+      "  }",
+      "}",
+      "class Beta {",
+      "  run() {",
+      "    return 2;",
+      "  }",
+      "}",
+    ].join("\n");
+    await writeFile(filePath, original, "utf8");
+
+    const tool = registerToolForTest();
+    await expect(
+      tool.execute(
+        "call-ambiguous",
+        { replacements: [{ path: "sample.ts", symbol: "run", text: "run() { return 0; }" }] },
+        undefined,
+        undefined,
+        { cwd } as never,
+      ),
+    ).rejects.toThrow(/Symbol 'run' matches 2 definitions in sample\.ts: Alpha\.run, Beta\.run/);
+
+    await expect(readFile(filePath, "utf8")).resolves.toBe(original);
+  });
+
   it("replaces a class method by suffix and keeps unrelated top-level code", async () => {
     const cwd = await createTempDir();
     const filePath = join(cwd, "sample.ts");

@@ -4,7 +4,7 @@ import { readSnapshot, type TextSnapshot } from "../edit/snapshot.js";
 import { recordAndWriteLocked, sessionOf, undoHint } from "../history/restore.js";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
-import { SymbolLocator, type SymbolRange } from "../ast/symbol-locator.js";
+import { resolveSymbolDefinition, type SymbolRange } from "../ast/symbol-locator.js";
 import { combineDiffs, createUnifiedDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
 import type { SymbolLocation, SymbolScanner } from "../symbols/symbol-scanner.js";
@@ -235,7 +235,6 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
     description: "Replace or delete AST symbols by name using tree-sitter ranges.",
     promptSnippet: "Use replace_symbol for complete function, method, class, or interface replacements.",
     promptGuidelines: [
-      "Use replace_symbol when replacing an entire function, method, class, interface, or exported const/arrow function.",
       "Pass text: \"\" to delete a symbol; the call refuses when surviving references exist unless force is true.",
       "Provide complete raw code without line-number prefixes; prefixes are stripped if accidentally included.",
       "Use find_symbol_references first when a rename or signature change could affect other files.",
@@ -284,7 +283,12 @@ export function registerReplaceSymbolTool(pi: ExtensionAPI, scanner: SymbolScann
 
           for (const replacement of batch.replacements) {
             throwIfAborted(signal);
-            const range = await SymbolLocator.getSymbolRange(batch.absolutePath, replacement.symbol, replacement.type);
+            const range = await resolveSymbolDefinition(
+              batch.absolutePath,
+              batch.displayPath,
+              replacement.symbol,
+              replacement.type,
+            );
             if (!range) throw new Error(missingSymbolMessage(replacement));
 
             if (replacement.text !== "") {

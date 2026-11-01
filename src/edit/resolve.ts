@@ -179,6 +179,7 @@ function resolveBetween(text: string, spec: EditSpec): Hit[] {
   }
 
   if (hits.length === 0) {
+    if (spec.expected_matches === 0) return [];
     if (danglingStarts.length > 0) {
       const starts = danglingStarts.map((offset) => `  ${lineOf(text, offset)}: ${text.split("\n")[lineOf(text, offset) - 1]?.trim()}`).join("\n");
       throw new Error(`No end delimiter found after the start delimiter:\n${starts}`);

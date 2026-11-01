@@ -86,18 +86,16 @@ function summarize(staged: StagedFile[]): string {
 export function registerEditTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "edit",
-    label: "edit",
+    label: "Edit",
     description:
-      "Edit files in one transaction: exact text, delimiter-bounded regions, or line ranges, across as many files as needed. Every edit is matched against the original file, validated before anything is written, and refused on overlap or count mismatch.",
+      "Edit one or more files in one transaction: exact text, delimiter-bounded regions, or line ranges. Every edit is matched against the original file and validated before anything is written.",
     promptSnippet:
       "Make precise file edits by exact text, delimiter-bounded region, or line range, including multiple disjoint edits across files in one call",
     promptGuidelines: [
-      "Batch all edits for a task into one edit call: several entries in edits[], one per region, may span multiple files.",
-      'mode "exact" replaces every occurrence of old; set expected_matches when the count matters.',
-      'mode "between" replaces the text between a start and end delimiter; use it when the region is large and retyping it is pointless. Set include_delimiters to replace the delimiters too, and new: "" with adjacent delimiters to insert.',
-      'mode "lines" replaces whole lines, numbered as get_file_skeleton and get_function print them with lines: true (or with bash: grep -n); end_line omitted means one line, end_line = start_line - 1 inserts before start_line.',
+      "Batch all edits for a task into one edit call: entries may target the same file or span several files.",
+      'mode "exact" replaces every occurrence of old (pass expected_matches when the count matters); mode "between" replaces between start and end (include_delimiters also replaces them, new: "" with adjacent delimiters inserts); mode "lines" replaces whole lines.',
+      "Line numbers come from get_file_skeleton or get_function with lines: true, from find_symbol_references, or from bash: grep -n; a gutter pasted into new is stripped.",
       "Every edit is matched against the original file, not against earlier edits in the same call. Ranges that overlap are an error.",
-      "Line-number gutters copied from get_file_skeleton or get_function output with lines: true are stripped from replacement text.",
     ],
     parameters: EditSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },

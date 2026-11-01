@@ -190,17 +190,15 @@ async function applyResult(
 export function registerRewindTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "rewind",
-    label: "rewind",
+    label: "Rewind",
     description:
-      'Browse and restore recorded file history. Without arguments it lists files with history in the working directory; with path only it lists that file\'s versions (id, time, lines added/removed). With an id, mode "show" returns what that transaction changed, "preview" the file as of that transaction, "undo" reverts the change (patching around later unrelated edits), and "restore" sets the files to their content at that transaction. Every undo and restore is itself recorded, so it can be reverted.',
+      "Browse recorded file history and put files back to an earlier transaction. With no arguments it lists the files that have history in the working directory; with path only it lists that file's versions.",
     promptSnippet: "Browse recorded file history and undo or restore a transaction's file changes",
     promptGuidelines: [
-      "rewind({}) lists files with recorded history; rewind({ path }) lists versions of one file, each with its id, time and +/- line counts.",
-      'rewind({ id, mode: "show" }) shows what a transaction changed; mode "preview" shows the file content at that transaction. Use preview before restore, show before undo.',
+      "rewind({}) lists files with recorded history; rewind({ path }) lists one file's versions with their ids, times and +/- line counts.",
+      'rewind({ id, mode: "show" }) shows what a transaction changed; mode "preview" shows the file content at it. Use preview before restore, show before undo.',
       'rewind({ id, mode: "undo" }) reverts the change, keeping edits that landed afterwards by patching around them; it writes nothing when the patch no longer applies.',
-      'rewind({ id, mode: "restore" }) overwrites the involved files with their content at that transaction, discarding later edits.',
-      "Every undo and restore is recorded as its own transaction; reverse it by running rewind on the returned id with the opposite mode.",
-      'id accepts "last" for the newest transaction in the working directory.',
+      'rewind({ id, mode: "restore" }) overwrites the involved files with their content at that transaction, discarding later edits. Every undo and restore is a transaction too, reversed with the opposite mode.',
     ],
     parameters: RewindSchema,
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },

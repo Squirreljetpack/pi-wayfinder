@@ -13,6 +13,11 @@ export interface SymbolRange {
   nameText: string;
 }
 
+export interface SymbolCandidate {
+  range: SymbolRange;
+  fullName: string;
+}
+
 export interface GetFunctionsResult {
   formattedContent: string;
   foundNames: string[];
@@ -22,6 +27,34 @@ export interface GetFunctionsResult {
  * Tree-sitter symbol location: file outlines, symbol bodies and symbol ranges.
  * Line numbers are 0-based rows internally and 1-based in rendered output.
  */
+/**
+ * Resolves one definition, refusing when a suffix names several different symbols: editing the
+ * wrong `run` is worse than asking for the full name.
+ */
+export async function resolveSymbolDefinition(
+  absolutePath: string,
+  displayPath: string,
+  symbol: string,
+  type?: string,
+): Promise<SymbolRange | null> {
+  const candidates = await SymbolLocator.getSymbolRanges(absolutePath, symbol, type);
+  if (candidates.length === 0) return null;
+
+  const names: string[] = [];
+  for (const candidate of candidates) {
+    if (!names.includes(candidate.fullName)) names.push(candidate.fullName);
+  }
+
+  if (names.length > 1) {
+    const shown = names.slice(0, 8).join(", ") + (names.length > 8 ? ", ..." : "");
+    throw new Error(
+      `Symbol '${symbol}' matches ${names.length} definitions in ${displayPath}: ${shown}. Pass the full dot-separated name${type === undefined ? " or type" : ""}.`,
+    );
+  }
+
+  return candidates[0].range;
+}
+
 export class SymbolLocator {
   /** Compact outline of every definition in a file, numbered on request. */
   static async getFileSkeleton(
@@ -45,7 +78,7 @@ export class SymbolLocator {
         lastLineAdded = startLine;
 
         if (options?.showCallGraph) {
-          if (def.lineCount !== undefined) formattedOutput += `${def.indentation}    # Lines: ${def.lineCount}\n`;
+          if (def.lineCount !== undefined) formattedOutput += `${def.indentation}    # ${def.lineCount} lines\n`;
           if (def.calls?.length) formattedOutput += `${def.indentation}    # Calls: [${def.calls.sort().join(", ")}]\n`;
         }
       }
@@ -66,7 +99,7 @@ export class SymbolLocator {
       languageParsers = await loadRequiredLanguageParsers([absolutePath]);
     } catch {
       return {
-        formattedContent: `Unsupported file type: ${relPath}`,
+        formattedContent: `Unsupported file type: ${relPath}; use read instead`,
         foundNames: [],
       };
     }
@@ -76,7 +109,7 @@ export class SymbolLocator {
 
     if (!parser || !query) {
       return {
-        formattedContent: `Unsupported file type: ${relPath}`,
+        formattedContent: `Unsupported file type: ${relPath}; use read instead`,
         foundNames: [],
       };
     }
@@ -87,14 +120,14 @@ export class SymbolLocator {
       tree = parser.parse(fileContent);
     } catch {
       return {
-        formattedContent: `Could not parse file: ${relPath}`,
+        formattedContent: `Could not parse file: ${relPath}; use read instead`,
         foundNames: [],
       };
     }
 
     if (!tree?.rootNode) {
       return {
-        formattedContent: `Could not parse file: ${relPath}`,
+        formattedContent: `Could not parse file: ${relPath}; use read instead`,
         foundNames: [],
       };
     }
@@ -164,30 +197,35 @@ export class SymbolLocator {
   }
 
   /** Replacement range of a single symbol. */
-  static async getSymbolRange(absolutePath: string, symbol: string, type?: string): Promise<SymbolRange | null> {
+  static async getSymbolRanges(
+    absolutePath: string,
+    symbol: string,
+    type?: string,
+  ): Promise<SymbolCandidate[]> {
     let languageParsers;
     try {
       languageParsers = await loadRequiredLanguageParsers([absolutePath]);
     } catch {
-      return null;
+      return [];
     }
 
     const ext = path.extname(absolutePath).toLowerCase().slice(1);
     const { parser, query } = languageParsers[ext] || {};
-    if (!parser || !query) return null;
+    if (!parser || !query) return [];
 
     const fileContent = await fs.readFile(absolutePath, "utf8");
     let tree;
     try {
       tree = parser.parse(fileContent);
     } catch {
-      return null;
+      return [];
     }
-    if (!tree?.rootNode) return null;
+    if (!tree?.rootNode) return [];
 
     const matches = query.matches(tree.rootNode);
     const nodeToMatch = SymbolLocator.buildNodeToMatch(matches);
     const normalizedRequestedSymbol = symbol.replace(/::/g, ".");
+    const candidates: SymbolCandidate[] = [];
 
     for (const match of matches) {
       const nameCapture = match.captures.find((capture) => capture.name.startsWith("name.definition"));
@@ -207,14 +245,16 @@ export class SymbolLocator {
         SymbolLocator.areTypesCompatible(defType, type)
       ) {
         const range = SymbolLocator.getExtendedRange(defCapture.node, fileContent);
-        return {
-          ...range,
-          nameText,
-        };
+        candidates.push({ range: { ...range, nameText }, fullName: normalizedFullName });
       }
     }
 
-    return null;
+    return candidates;
+  }
+
+  static async getSymbolRange(absolutePath: string, symbol: string, type?: string): Promise<SymbolRange | null> {
+    const [first] = await SymbolLocator.getSymbolRanges(absolutePath, symbol, type);
+    return first?.range ?? null;
   }
 
   private static buildNodeToMatch(matches: QueryMatch[]): Map<number, QueryMatch> {

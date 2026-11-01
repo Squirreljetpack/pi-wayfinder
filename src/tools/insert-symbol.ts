@@ -2,8 +2,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 import { readSnapshot, type TextSnapshot } from "../edit/snapshot.js";
 import { recordAndWriteLocked, sessionOf, undoHint } from "../history/restore.js";
-import { dirname, resolve } from "node:path";
-import { SymbolLocator, type SymbolRange } from "../ast/symbol-locator.js";
+import { resolve } from "node:path";
+import { resolveSymbolDefinition, type SymbolRange } from "../ast/symbol-locator.js";
 import { combineDiffs, createUnifiedDiff, type DiffDetails } from "../rendering/diff-output.js";
 import { renderCodeLikeCall, renderDiffResult } from "../rendering/pi-renderers.js";
 import { stripLineNumbers } from "./line-numbers.js";
@@ -181,7 +181,12 @@ export function registerInsertSymbolTool(pi: ExtensionAPI): void {
           const resolved: ResolvedSymbolInsertion[] = [];
           for (const insertion of batch.insertions) {
             throwIfAborted(signal);
-            const range = await SymbolLocator.getSymbolRange(batch.absolutePath, insertion.symbol, insertion.type);
+            const range = await resolveSymbolDefinition(
+              batch.absolutePath,
+              batch.displayPath,
+              insertion.symbol,
+              insertion.type,
+            );
             if (!range) throw new Error(missingSymbolMessage(insertion));
             resolved.push({ insertion, range });
           }

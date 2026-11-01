@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SymbolLocator } from "../src/ast/symbol-locator.js";
+import { resolveSymbolDefinition, SymbolLocator } from "../src/ast/symbol-locator.js";
 
 const tempDirs: string[] = [];
 async function createTempDir(): Promise<string> {
@@ -50,6 +50,25 @@ describe("SymbolLocator", () => {
     expect(skeleton).not.toContain("│");
     expect(functions?.formattedContent).toContain("  run() { return 1; }");
     expect(functions?.formattedContent).not.toContain("│");
+  });
+
+  it("returns every candidate for an ambiguous suffix", async () => {
+    const cwd = await createTempDir();
+    const filePath = join(cwd, "sample.ts");
+    await writeFile(filePath, [
+      "class Alpha {",
+      "  run() { return 1; }",
+      "}",
+      "class Beta {",
+      "  run() { return 2; }",
+      "}",
+    ].join("\n"), "utf8");
+
+    const candidates = await SymbolLocator.getSymbolRanges(filePath, "run");
+
+    expect(candidates.map((candidate) => candidate.fullName)).toEqual(["Alpha.run", "Beta.run"]);
+    await expect(resolveSymbolDefinition(filePath, "sample.ts", "run")).rejects.toThrow(/Alpha\.run, Beta\.run/);
+    await expect(resolveSymbolDefinition(filePath, "sample.ts", "Beta.run")).resolves.toMatchObject({ nameText: "run" });
   });
 
   it("extracts nested method implementations by suffix name", async () => {

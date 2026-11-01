@@ -29,7 +29,8 @@ function registerSkeletonToolForTest(): RegisteredTool {
   expect(registeredTool).toBeDefined();
   expect(registeredTool?.name).toBe("get_file_skeleton");
   expect(registeredTool?.label).toBe("Get File Skeleton");
-  expect(registeredTool?.description).toContain("First-pass source exploration");
+  expect(registeredTool?.description).toContain("Compact outline of a file's functions");
+  expect(registeredTool?.description).toContain("|----");
   return registeredTool as RegisteredTool;
 }
 
@@ -46,7 +47,7 @@ function registerFunctionToolForTest(): RegisteredTool {
   expect(registeredTool).toBeDefined();
   expect(registeredTool?.name).toBe("get_function");
   expect(registeredTool?.label).toBe("Get Function");
-  expect(registeredTool?.description).toContain("After get_file_skeleton");
+  expect(registeredTool?.description).toContain("Source of the named definitions");
   return registeredTool as RegisteredTool;
 }
 
@@ -54,8 +55,8 @@ describe("AST read tools", () => {
   it("widens the regex fallback by the requested context", () => {
     const content = ["const above = 1;", "function pick() {", "  return 2;", "}", "const below = 3;"].join("\n");
 
-    const plain = getRegexFunction(content, "sample.xyz", "sample.xyz", "pick", false);
-    const wide = getRegexFunction(content, "sample.xyz", "sample.xyz", "pick", true, 1);
+    const plain = getRegexFunction(content, "sample.xyz", "pick", false);
+    const wide = getRegexFunction(content, "sample.xyz", "pick", true, 1);
 
     expect(plain).toBe("sample.xyz::pick\nfunction pick() {\n  return 2;\n}");
     expect(wide).toBe(

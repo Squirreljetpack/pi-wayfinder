@@ -9,14 +9,14 @@ export const EditSchema = Type.Object({
 			mode: Type.Optional(
 				Type.Union([Type.Literal("exact"), Type.Literal("between"), Type.Literal("lines")], {
 					description:
-						"How to name the region: exact text, a start/end delimiter pair, or line numbers",
+						'How the region is named: "exact" text, "between" delimiters, "lines" line numbers. Defaults to "exact" when old is set, otherwise required',
 				}),
 			),
 			expected_matches: Type.Optional(
 				Type.Integer({
 					minimum: 0,
 					description:
-						"Abort the whole call when this edit matches a different number of regions (0 asserts absence)",
+						'Abort the whole call unless this edit matches exactly this many times. 0 asserts absence: the old text, or any start/end pair in mode "between"',
 				}),
 			),
 			old: Type.Optional(
@@ -67,7 +67,7 @@ export const RewindSchema = Type.Object({
 	id: Type.Optional(
 		Type.String({
 			description:
-				'Version id from a rewind listing, or "last" for the newest transaction in the working directory',
+				'Transaction id from a tool result or a rewind listing, or "last" for the newest transaction in the working directory',
 		}),
 	),
 	mode: Type.Optional(
@@ -80,7 +80,7 @@ export const RewindSchema = Type.Object({
 			],
 			{
 				description:
-					'show: what the transaction changed; preview: the file at that transaction; undo: revert the change; restore: set the files to that transaction',
+					'show: what the transaction changed; preview: the file at that transaction; undo: revert the change; restore: set the files to that transaction. Requires id; defaults to "show"',
 			},
 		),
 	),
@@ -125,7 +125,7 @@ export const ReplaceSymbolSchema = Type.Object({
 				description: "Relative or absolute source file path",
 			}),
 			symbol: Type.String({
-				description: "Dot-separated symbol path or suffix to replace",
+				description: "Dot-separated symbol path or suffix to replace; a suffix that matches several different symbols is refused with the candidates",
 			}),
 			text: Type.String({
 				description: "Complete replacement source for the symbol",
@@ -133,7 +133,7 @@ export const ReplaceSymbolSchema = Type.Object({
 			type: Type.Optional(
 				Type.String({
 					description:
-						"Optional symbol type such as function, method, class, or interface",
+						"Only match this kind of definition (function, method, class, interface), for when two definitions share a name",
 				}),
 			),
 			force: Type.Optional(
@@ -154,7 +154,7 @@ export const InsertSymbolSchema = Type.Object({
 			}),
 			symbol: Type.String({
 				description:
-					"Dot-separated symbol path or suffix to insert adjacent to",
+					"Dot-separated symbol path or suffix to insert adjacent to; a suffix that matches several different symbols is refused with the candidates",
 			}),
 			position: Type.Union([Type.Literal("before"), Type.Literal("after")], {
 				description: "Insert before or after the symbol definition",
@@ -163,7 +163,7 @@ export const InsertSymbolSchema = Type.Object({
 			type: Type.Optional(
 				Type.String({
 					description:
-						"Optional symbol type such as function, method, class, or interface",
+						"Only match this kind of definition (function, method, class, interface), for when two definitions share a name",
 				}),
 			),
 		}),
@@ -187,11 +187,9 @@ export const FindSymbolReferencesSchema = Type.Object({
 		}),
 	),
 	find_type: Type.Optional(
-		Type.Union([
-			Type.Literal("definition"),
-			Type.Literal("reference"),
-			Type.Literal("both"),
-		]),
+		Type.Union([Type.Literal("definition"), Type.Literal("reference"), Type.Literal("both")], {
+			description: '"definition", "reference", or "both" (default)',
+		}),
 	),
 });
 

@@ -39,7 +39,7 @@ be undone — by the agent or from `/rewind`.
   count differs; `0` asserts the text is absent.
 - **between** replaces what lies between `start` and `end`. Use it when the region is large enough
   that retyping it is pointless. `include_delimiters: true` replaces the delimiters too; adjacent
-  delimiters with `new` text insert.
+  delimiters with `new` text insert. `expected_matches: 0` asserts that no such region exists.
 - **lines** replaces whole lines from `start_line` to `end_line` (inclusive, defaulting to
   `start_line`). `end_line = start_line - 1` inserts before `start_line`. Numbers come from
   `get_file_skeleton` / `get_function` with `lines: true`, or from `bash: grep -n`.
@@ -50,6 +50,10 @@ and a failure during the write phase restores the files already written.
 
 Line-number gutters copied from `get_file_skeleton` or `get_function` output (`lines: true`) are
 stripped from replacement text, so pasting numbered lines cannot inject the gutter into a file.
+
+`replace_symbol` and `insert_symbol` take a dot-separated symbol path or a suffix. When a suffix
+matches several different symbols (`run` in two classes), the call is refused with the candidate
+names; pass the full name or narrow it with `type`.
 
 ### File history
 
