@@ -138,6 +138,16 @@ describe("git history store", () => {
     expect(message).toContain("session-dir: /sessions");
     expect(message).toContain(`cwd: ${cwd}`);
     expect(message).toContain(`  ${join(cwd, "a.ts").slice(1)}`);
+    expect(message).not.toContain("branch:");
+  });
+
+  it("records the project branch, including an unborn one", async () => {
+    const cwd = await createTempDir();
+    spawnSync("git", ["init", "--quiet", "-b", "trunk", cwd]);
+
+    const id = await record(cwd, join(cwd, "a.ts"), "one\n", "two\n");
+
+    expect(runGit(["show", "-s", "--format=%B", id])).toContain("branch: trunk");
   });
 
   it("stores the exact bytes, including a BOM and CRLF line endings", async () => {

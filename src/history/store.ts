@@ -82,6 +82,8 @@ export interface HistoryFile {
 
 export interface RecordOptions {
   cwd: string;
+  /** Project branch this transaction happened on; detected from `cwd` when omitted. */
+  branch?: string | null;
   kind: string;
   headline: string;
   files: HistoryFile[];
@@ -107,6 +109,7 @@ export interface StoredTransaction {
   createdAt: number;
   session?: HistorySession;
   cwd?: string;
+  branch?: string;
   files: StoredFile[];
 }
 
@@ -145,9 +148,9 @@ export function historyRepoPath(): string {
   return join(home, "history.git");
 }
 
-function git(repo: string, args: string[], options: GitOptions = {}): Promise<GitResult> {
+function runGit(args: string[], options: GitOptions = {}): Promise<GitResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn("git", ["--git-dir", repo, ...args], {
+    const child = spawn("git", args, {
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C", ...options.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -169,6 +172,23 @@ function git(repo: string, args: string[], options: GitOptions = {}): Promise<Gi
     if (options.input === undefined) child.stdin.end();
     else child.stdin.end(options.input);
   });
+}
+
+function git(repo: string, args: string[], options: GitOptions = {}): Promise<GitResult> {
+  return runGit(["--git-dir", repo, ...args], options);
+}
+
+/** Branch of the project repository containing `cwd`, when there is one. */
+async function projectBranch(cwd: string): Promise<string | null> {
+  const symbolic = await runGit(["-C", cwd, "symbolic-ref", "--short", "-q", "HEAD"], { allowFailure: true });
+  if (symbolic.code === 0) {
+    const name = text(symbolic).trim();
+    if (name) return name;
+  }
+
+  const detached = await runGit(["-C", cwd, "rev-parse", "--short", "HEAD"], { allowFailure: true });
+  const sha = text(detached).trim();
+  return detached.code === 0 && sha.length > 0 ? `(detached ${sha})` : null;
 }
 
 function text(result: GitResult): string {
@@ -253,6 +273,7 @@ function buildMessage(options: RecordOptions): string {
   if (options.session?.dir) lines.push(`session-dir: ${options.session.dir}`);
   if (options.session?.file) lines.push(`session-file: ${options.session.file}`);
   lines.push(`cwd: ${options.cwd}`);
+  if (options.branch) lines.push(`branch: ${options.branch}`);
   for (const note of options.notes ?? []) lines.push(note);
   lines.push("files:");
   for (const file of options.files) {
@@ -326,9 +347,12 @@ export async function recordTransaction(options: RecordOptions): Promise<string 
     return null;
   }
 
+  const branch = options.branch === undefined ? await projectBranch(options.cwd) : options.branch;
+  const commitOptions: RecordOptions = { ...options, branch };
+
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      const commit = await commitOnce(repo, options, options.files);
+      const commit = await commitOnce(repo, commitOptions, commitOptions.files);
       if (commit) {
         await git(repo, ["gc", "--auto", "--quiet"], { allowFailure: true });
         return commit;
@@ -378,6 +402,7 @@ interface TransactionMeta {
   subject: string;
   session: HistorySession;
   cwd?: string;
+  branch?: string;
   /** Files the transaction touched, in the order the caller listed them. */
   manifest: string[];
 }
@@ -408,6 +433,7 @@ function parseMeta(message: string): TransactionMeta {
     kind: fields.get("kind") ?? "unknown",
     subject: stripBom(subject).trim(),
     cwd: fields.get("cwd"),
+    branch: fields.get("branch"),
     session: { id: fields.get("session"), dir: fields.get("session-dir"), file: fields.get("session-file") },
     manifest,
   };
@@ -450,6 +476,7 @@ export async function getTransaction(id: string, cwd: string): Promise<StoredTra
     id: commit,
     parent,
     kind: parsed.kind,
+    branch: parsed.branch,
     subject: parsed.subject,
     createdAt: Number.parseInt(createdRaw, 10) * 1000,
     session: parsed.session,
