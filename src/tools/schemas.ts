@@ -16,7 +16,7 @@ export const EditSchema = Type.Object({
 				Type.Integer({
 					minimum: 0,
 					description:
-						'Abort the whole call unless this edit matches exactly this many times. 0 asserts absence: the old text, or any start/end pair in mode "between"',
+						"Abort the whole call unless this edit matches exactly this many times",
 				}),
 			),
 			old: Type.Optional(

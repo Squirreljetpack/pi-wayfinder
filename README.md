@@ -36,7 +36,7 @@ be undone — by the agent or from `/rewind`.
 ```
 
 - **exact** replaces every occurrence of `old`. `expected_matches` aborts the whole call when the
-  count differs; `0` asserts the text is absent.
+  count differs.
 - **between** replaces what lies between `start` and `end`. Use it when the region is large enough
   that retyping it is pointless. `include_delimiters: true` replaces the delimiters too; adjacent
   delimiters with `new` text insert. `expected_matches: 0` asserts that no such region exists.
