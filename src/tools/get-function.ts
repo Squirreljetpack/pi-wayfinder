@@ -4,10 +4,20 @@ import { resolve } from "node:path";
 import { SymbolLocator, type GetFunctionsResult } from "../ast/symbol-locator.js";
 import { formatLine } from "./line-numbers.js";
 import { renderCodeLikeCall, renderCodeLikeResult } from "../rendering/pi-renderers.js";
-import { appendOutputLine, appendTruncationNotice, createOutputAccumulator, throwIfAborted } from "./output-limits.js";
+import type { SymbolScanner } from "../symbols/symbol-scanner.js";
+import {
+  appendOutputLine,
+  appendTruncationNotice,
+  createOutputAccumulator,
+  throwIfAborted,
+  type OutputAccumulator,
+} from "./output-limits.js";
 import { GetFunctionSchema } from "./schemas.js";
 
 const NEXT_JS_TS_DEFINITION_LINE = /^(export\s+)?(default\s+)?(async\s+)?(function|class|const)\b/;
+
+/** Definition sites a whole-workspace scan renders before it stops and says how many it skipped. */
+const MAX_SCAN_SITES = 20;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -258,6 +268,17 @@ function isFallbackAstResult(result: GetFunctionsResult | null): boolean {
   );
 }
 
+interface GetFunctionOptions {
+  lines?: boolean;
+  context?: number;
+}
+
+interface ScanTarget {
+  absolutePath: string;
+  displayPath: string;
+  names: string[];
+}
+
 function appendText(output: ReturnType<typeof createOutputAccumulator>, text: string): void {
   const lines = text.replace(/\r?\n$/, "").split(/\r?\n/);
   for (const line of lines) {
@@ -265,7 +286,92 @@ function appendText(output: ReturnType<typeof createOutputAccumulator>, text: st
   }
 }
 
-export function registerGetFunctionTool(pi: ExtensionAPI): void {
+function appendSeparator(output: OutputAccumulator): void {
+  appendOutputLine(output, "");
+  appendOutputLine(output, "---");
+  appendOutputLine(output, "");
+}
+
+/** The definition's own name: a dot-separated request is narrowed by its last segment before the AST match. */
+function lastSegment(name: string): string {
+  const parts = name.split(/::|\./);
+  return parts[parts.length - 1] ?? name;
+}
+
+async function resolveScanTargets(
+  scanner: SymbolScanner,
+  names: string[],
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<{ targets: ScanTarget[]; totalSites: number }> {
+  const requestedBySegment = new Map<string, string[]>();
+  for (const name of names) {
+    const segment = lastSegment(name);
+    const bucket = requestedBySegment.get(segment) ?? [];
+    if (!bucket.includes(name)) bucket.push(name);
+    requestedBySegment.set(segment, bucket);
+  }
+
+  const locations = await scanner.scanPaths(["."], cwd, signal);
+  const sites = locations
+    .filter((location) => location.type === "definition" && requestedBySegment.has(location.name))
+    .sort((a, b) => a.displayPath.localeCompare(b.displayPath) || a.startLine - b.startLine);
+
+  const targets: ScanTarget[] = [];
+  const byFile = new Map<string, ScanTarget>();
+  for (const site of sites.slice(0, MAX_SCAN_SITES)) {
+    let target = byFile.get(site.absolutePath);
+    if (!target) {
+      target = { absolutePath: site.absolutePath, displayPath: site.displayPath, names: [] };
+      byFile.set(site.absolutePath, target);
+      targets.push(target);
+    }
+    for (const requested of requestedBySegment.get(site.name) ?? []) {
+      if (!target.names.includes(requested)) target.names.push(requested);
+    }
+  }
+
+  return { targets, totalSites: sites.length };
+}
+
+/** Appends one file's definitions; a scan target that does not resolve through the AST is skipped. */
+async function emitFile(
+  output: OutputAccumulator,
+  target: ScanTarget,
+  options: GetFunctionOptions,
+  signal: AbortSignal | undefined,
+  requireAst: boolean,
+): Promise<void> {
+  throwIfAborted(signal, "get_function aborted");
+
+  let astResult: GetFunctionsResult | null = null;
+  try {
+    astResult = await SymbolLocator.getFunctions(target.absolutePath, target.displayPath, target.names, options);
+  } catch {
+    astResult = null;
+  }
+  throwIfAborted(signal, "get_function aborted");
+
+  if (astResult && !isFallbackAstResult(astResult)) {
+    if (astResult.foundNames.length === 0) return;
+    if (output.lineCount > 0) appendSeparator(output);
+    appendText(output, astResult.formattedContent);
+    return;
+  }
+
+  if (requireAst) return;
+
+  const content = await readFile(target.absolutePath, { encoding: "utf8", signal });
+
+  for (const name of target.names) {
+    throwIfAborted(signal, "get_function aborted");
+
+    if (output.lineCount > 0) appendSeparator(output);
+    appendText(output, getRegexFunction(content, target.displayPath, name, options.lines, options.context));
+  }
+}
+
+export function registerGetFunctionTool(pi: ExtensionAPI, scanner: SymbolScanner): void {
   pi.registerTool({
     name: "get_function",
     label: "Get Function",
@@ -279,7 +385,7 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
     ],
     parameters: GetFunctionSchema,
     renderCall(args, theme) {
-      const paths = Array.isArray(args.paths) ? args.paths : [];
+      const paths = Array.isArray(args.paths) && args.paths.length > 0 ? args.paths : ["(workspace)"];
       const names = Array.isArray(args.function_names) ? args.function_names.join(", ") : "";
       const suffix = names ? theme.fg("dim", ` (${names})`) : "";
       return renderCodeLikeCall("get_function", paths, theme, suffix);
@@ -289,55 +395,53 @@ export function registerGetFunctionTool(pi: ExtensionAPI): void {
     },
     async execute(_id, params, signal, _onUpdate, ctx) {
       const output = createOutputAccumulator();
-      let hasOutput = false;
+      const names = params.function_names as string[] | undefined;
+      if (!Array.isArray(names) || names.length === 0) {
+        throw new Error("Missing required parameter: function_names");
+      }
 
-      for (const requestedPath of params.paths) {
-        throwIfAborted(signal, "get_function aborted");
+      const options: GetFunctionOptions = { lines: params.lines, context: params.context };
+      const requestedPaths = Array.isArray(params.paths) ? params.paths : [];
 
-        const normalizedPath = requestedPath.replace(/^@/, "");
-        const absolutePath = resolve(ctx.cwd, normalizedPath);
-
-        let astResult: GetFunctionsResult | null = null;
-        try {
-          astResult = await SymbolLocator.getFunctions(absolutePath, requestedPath, params.function_names, {
-            lines: params.lines,
-            context: params.context,
-          });
-        } catch {
-          astResult = null;
-        }
-        throwIfAborted(signal, "get_function aborted");
-
-        if (astResult && !isFallbackAstResult(astResult)) {
-          if (hasOutput) {
-            appendOutputLine(output, "");
-            appendOutputLine(output, "---");
-            appendOutputLine(output, "");
-          }
-          appendText(output, astResult.formattedContent);
-          hasOutput = true;
-          continue;
+      if (requestedPaths.length === 0) {
+        const scan = await resolveScanTargets(scanner, names, ctx.cwd, signal);
+        for (const target of scan.targets) {
+          await emitFile(output, target, options, signal, true);
         }
 
-        const content = await readFile(absolutePath, { encoding: "utf8", signal });
+        if (output.lineCount === 0) {
+          return {
+            content: [{ type: "text", text: `No definitions found for: ${names.join(", ")} in ${ctx.cwd}.` }],
+            details: { paths: requestedPaths, function_names: names, scanned: true },
+          };
+        }
 
-        for (const name of params.function_names) {
-          throwIfAborted(signal, "get_function aborted");
-
-          if (hasOutput) {
-            appendOutputLine(output, "");
-            appendOutputLine(output, "---");
-            appendOutputLine(output, "");
-          }
-
-          appendText(output, getRegexFunction(content, requestedPath, name, params.lines, params.context));
-          hasOutput = true;
+        const shown = Math.min(scan.totalSites, MAX_SCAN_SITES);
+        if (scan.totalSites > shown) {
+          appendSeparator(output);
+          appendText(
+            output,
+            `[Scanned the working directory: showing the first ${shown} of ${scan.totalSites} matching definitions. Pass paths to narrow the scan.]`,
+          );
+        }
+      } else {
+        for (const requestedPath of requestedPaths) {
+          const target: ScanTarget = {
+            absolutePath: resolve(ctx.cwd, requestedPath.replace(/^@/, "")),
+            displayPath: requestedPath,
+            names,
+          };
+          await emitFile(output, target, options, signal, false);
         }
       }
 
       return {
         content: [{ type: "text", text: appendTruncationNotice(output.parts.join(""), output) }],
-        details: { paths: params.paths, function_names: params.function_names },
+        details: {
+          paths: requestedPaths,
+          function_names: names,
+          ...(requestedPaths.length === 0 ? { scanned: true } : {}),
+        },
       };
     }
   });

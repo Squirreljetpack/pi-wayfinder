@@ -98,8 +98,8 @@ export const GetFileSkeletonSchema = Type.Object({
 });
 
 export const GetFunctionSchema = Type.Object({
-	paths: Type.Array(
-		Type.String({ description: "Relative or absolute source file paths" }),
+	paths: Type.Optional(
+		Type.Array(Type.String({ description: "Relative or absolute source file paths" })),
 	),
 	function_names: Type.Array(
 		Type.String({ description: "Function, class, or method names to read" }),

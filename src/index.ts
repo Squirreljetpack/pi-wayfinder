@@ -22,7 +22,7 @@ export default function wayfinderExtension(pi: ExtensionAPI): void {
 	registerRewindCommand(pi);
 	registerPruneRewindCommand(pi);
 	registerGetFileSkeletonTool(pi);
-	registerGetFunctionTool(pi);
+	registerGetFunctionTool(pi, symbolScanner);
 	registerReplaceSymbolTool(pi, symbolScanner);
 	registerInsertSymbolTool(pi);
 	registerFindSymbolReferencesTool(pi, symbolScanner);

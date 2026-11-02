@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerGetFileSkeletonTool } from "../src/tools/get-file-skeleton.js";
 import { getRegexFunction, registerGetFunctionTool } from "../src/tools/get-function.js";
+import { SymbolCache } from "../src/symbols/symbol-cache.js";
+import { SymbolScanner } from "../src/symbols/symbol-scanner.js";
 
  type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
 
@@ -42,7 +44,7 @@ function registerFunctionToolForTest(): RegisteredTool {
     })
   };
 
-  registerGetFunctionTool(pi as unknown as ExtensionAPI);
+  registerGetFunctionTool(pi as unknown as ExtensionAPI, new SymbolScanner(new SymbolCache()));
 
   expect(registeredTool).toBeDefined();
   expect(registeredTool?.name).toBe("get_function");

@@ -53,6 +53,14 @@ function collectTool(register: (pi: never) => void): RegisteredTool {
   return tool;
 }
 
+function collectFunctionTool(): RegisteredTool {
+  let tool: RegisteredTool | undefined;
+  const scanner = new SymbolScanner(new SymbolCache());
+  registerGetFunctionTool({ registerTool: (registered: RegisteredTool) => { tool = registered; } } as never, scanner);
+  if (!tool) throw new Error("get_function was not registered");
+  return tool;
+}
+
 function collectRenameTool(): RegisteredTool {
   let tool: RegisteredTool | undefined;
   const scanner = new SymbolScanner(new SymbolCache());
@@ -145,7 +153,7 @@ describe("pi render helpers", () => {
 describe("ast tool renderers", () => {
   it("get_file_skeleton and get_function expose renderers", () => {
     expect(collectTool(registerGetFileSkeletonTool as never).renderResult).toBeTypeOf("function");
-    expect(collectTool(registerGetFunctionTool as never).renderResult).toBeTypeOf("function");
+    expect(collectFunctionTool().renderResult).toBeTypeOf("function");
   });
 });
 

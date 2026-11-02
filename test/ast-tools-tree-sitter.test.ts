@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerGetFileSkeletonTool } from "../src/tools/get-file-skeleton.js";
 import { registerGetFunctionTool } from "../src/tools/get-function.js";
+import { SymbolCache } from "../src/symbols/symbol-cache.js";
+import { SymbolScanner } from "../src/symbols/symbol-scanner.js";
 
 type RegisteredTool = Parameters<ExtensionAPI["registerTool"]>[0];
 
@@ -38,7 +40,7 @@ function registerFunctionToolForTest(): RegisteredTool {
     }),
   };
 
-  registerGetFunctionTool(pi as unknown as ExtensionAPI);
+  registerGetFunctionTool(pi as unknown as ExtensionAPI, new SymbolScanner(new SymbolCache()));
 
   expect(registeredTool).toBeDefined();
   return registeredTool as RegisteredTool;
@@ -207,5 +209,67 @@ describe("tree-sitter AST read tool integration", () => {
     expect(text).toContain("3│    return 1;");
     expect(text).toContain("4│  }");
     expect(text).not.toContain("const helper = () => 2;");
+  });
+
+  it("scans the working directory when paths are omitted", async () => {
+    const cwd = await createTempDir();
+    await writeFile(
+      join(cwd, "alpha.ts"),
+      ["export function pick() {", "  return 'alpha';", "}"].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      join(cwd, "beta.ts"),
+      ["export class Beta {", "  pick() {", "    return 'beta';", "  }", "}"].join("\n"),
+      "utf8",
+    );
+    await writeFile(join(cwd, "gamma.ts"), ["export const other = 1;"].join("\n"), "utf8");
+
+    const tool = registerFunctionToolForTest();
+    const result = await tool.execute("call-5", { function_names: ["pick"] }, undefined, undefined, {
+      cwd,
+    } as never);
+    const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+
+    expect(text).toContain("alpha.ts::pick");
+    expect(text).toContain("return 'alpha';");
+    expect(text).toContain("beta.ts::Beta.pick");
+    expect(text).toContain("return 'beta';");
+    expect(text).not.toContain("gamma.ts");
+    expect(text).not.toContain("Pass paths to narrow the scan");
+  });
+
+  it("bounds a workspace scan and says how many definitions it skipped", async () => {
+    const cwd = await createTempDir();
+    for (let index = 0; index < 21; index++) {
+      await writeFile(
+        join(cwd, `module-${String(index).padStart(2, "0")}.ts`),
+        [`export function repeated() {`, `  return ${index};`, `}`].join("\n"),
+        "utf8",
+      );
+    }
+
+    const tool = registerFunctionToolForTest();
+    const result = await tool.execute("call-6", { function_names: ["repeated"] }, undefined, undefined, {
+      cwd,
+    } as never);
+    const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+
+    expect(text).toContain("showing the first 20 of 21 matching definitions");
+    expect(text).toContain("module-19.ts::repeated");
+    expect(text).not.toContain("module-20.ts::repeated");
+  });
+
+  it("reports when a workspace scan finds nothing", async () => {
+    const cwd = await createTempDir();
+    await writeFile(join(cwd, "sample.ts"), "export const other = 1;\n", "utf8");
+
+    const tool = registerFunctionToolForTest();
+    const result = await tool.execute("call-7", { function_names: ["missing"] }, undefined, undefined, {
+      cwd,
+    } as never);
+    const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+
+    expect(text).toContain("No definitions found for: missing");
   });
 });
